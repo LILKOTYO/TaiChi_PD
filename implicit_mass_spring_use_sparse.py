@@ -8,10 +8,10 @@ import taichi as ti
 @ti.data_oriented
 class Cloth:
     def __init__(self, N):
-        self.N = N
+        self.N = N # number of block in one dimension
         self.NF = 2 * N**2  # number of faces
         self.NV = (N + 1)**2  # number of vertices
-        self.NE = 2 * N * (N + 1) + 2 * N * N  # numbser of edges
+        self.NE = 2 * N * (N + 1) + 2 * N * N  # number of edges
         self.pos = ti.Vector.field(2, ti.f32, self.NV)
         self.initPos = ti.Vector.field(2, ti.f32, self.NV)
         self.vel = ti.Vector.field(2, ti.f32, self.NV)
@@ -33,13 +33,13 @@ class Cloth:
         self.init_pos()
         self.init_edges()
         self.MassBuilder = ti.linalg.SparseMatrixBuilder(
-            2 * self.NV, 2 * self.NV, max_num_triplets=10000)
+            2 * self.NV, 2 * self.NV, max_num_triplets=10000)   # mass matrix
         self.DBuilder = ti.linalg.SparseMatrixBuilder(2 * self.NV,
                                                       2 * self.NV,
-                                                      max_num_triplets=10000)
+                                                      max_num_triplets=10000)   # what is D matrix?
         self.KBuilder = ti.linalg.SparseMatrixBuilder(2 * self.NV,
                                                       2 * self.NV,
-                                                      max_num_triplets=10000)
+                                                      max_num_triplets=10000)   # what is K matrix?
         self.init_mass_sp(self.MassBuilder)
         self.M = self.MassBuilder.build()
         self.fix_vertex = [self.N, self.NV - 1]
