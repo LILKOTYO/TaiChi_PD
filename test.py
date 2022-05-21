@@ -2,9 +2,9 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-dim_length = 9
-dim_width = 9
-dim_height = 9
+dim_length = 63
+dim_width = 63
+dim_height = 63
 
 n_objects = (dim_length + 1) * (dim_width + 1) * (dim_height + 1)
 n_faces = dim_length * dim_width * 2 * (dim_height + 1) \
