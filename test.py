@@ -6,16 +6,35 @@ dim_length = 63
 dim_width = 63
 dim_height = 63
 
-n_objects = (dim_length + 1) * (dim_width + 1) * (dim_height + 1)
-n_faces = dim_length * dim_width * 2 * (dim_height + 1) \
-    + dim_width * dim_height * 2 * (dim_length + 1) \
-    + dim_height * dim_length * 2 * (dim_width + 1)
-n_edges = dim_length * (dim_width + 1) * (dim_height + 1) \
-    + dim_width * (dim_height + 1) * (dim_length + 1) \
-    + dim_height * (dim_length + 1) * (dim_width + 1) \
-    + n_faces
 
-print(n_objects, n_faces, n_edges)
+@ti.kernel
+def test():
+    I = ti.Matrix([[1.0, 2.0], [3.0, 4.0]])
+    print(I)
+
+
+test()
+# spring = ti.Vector.field(2, ti.i32, dim_height)
+#
+#
+# @ti.kernel
+# def test():
+#     for i in spring:
+#         print(i)
+#         print(spring[i])
+#
+#
+# test()
+# n_objects = (dim_length + 1) * (dim_width + 1) * (dim_height + 1)
+# n_faces = dim_length * dim_width * 2 * (dim_height + 1) \
+#     + dim_width * dim_height * 2 * (dim_length + 1) \
+#     + dim_height * dim_length * 2 * (dim_width + 1)
+# n_edges = dim_length * (dim_width + 1) * (dim_height + 1) \
+#     + dim_width * (dim_height + 1) * (dim_length + 1) \
+#     + dim_height * (dim_length + 1) * (dim_width + 1) \
+#     + n_faces
+#
+# print(n_objects, n_faces, n_edges)
 
 # x = ti.Vector.field(3, ti.f32)
 # block1 = ti.root.dense(ti.i, 10).place(x)

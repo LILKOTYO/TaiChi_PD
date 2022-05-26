@@ -36,10 +36,10 @@ class Cloth:
             2 * self.NV, 2 * self.NV, max_num_triplets=10000)   # mass matrix
         self.DBuilder = ti.linalg.SparseMatrixBuilder(2 * self.NV,
                                                       2 * self.NV,
-                                                      max_num_triplets=10000)   # what is D matrix?
+                                                      max_num_triplets=10000)   # D: derivative of force to the velocity
         self.KBuilder = ti.linalg.SparseMatrixBuilder(2 * self.NV,
                                                       2 * self.NV,
-                                                      max_num_triplets=10000)   # what is K matrix?
+                                                      max_num_triplets=10000)   # K: derivative of force to the position
         self.init_mass_sp(self.MassBuilder)
         self.M = self.MassBuilder.build()
         self.fix_vertex = [self.N, self.NV - 1]
@@ -49,40 +49,43 @@ class Cloth:
     @ti.kernel
     def init_pos(self):
         for i, j in ti.ndrange(self.N + 1, self.N + 1):
-            k = i * (self.N + 1) + j
-            self.pos[k] = ti.Vector([i, j]) / self.N * 0.5 + ti.Vector(
-                [0.25, 0.25])
+            k = i * (self.N + 1) + j    # get the index from coordinate
+            # from (0.25, 0.25) to (0.85, 0.85)
+            self.pos[k] = ti.Vector([i, j]) / self.N * 0.5 + ti.Vector([0.25, 0.25])
             self.initPos[k] = self.pos[k]
             self.vel[k] = ti.Vector([0, 0])
             self.mass[k] = 1.0
 
     @ti.kernel
     def init_edges(self):
+        # get the compile time parameter
         pos, spring, N, rest_len = ti.static(self.pos, self.spring, self.N,
                                              self.rest_len)
-        for i, j in ti.ndrange(N + 1, N):
+        for i, j in ti.ndrange(N + 1, N):   # the horizontal edges
             idx, idx1 = i * N + j, i * (N + 1) + j
             spring[idx] = ti.Vector([idx1, idx1 + 1])
             rest_len[idx] = (pos[idx1] - pos[idx1 + 1]).norm()
         start = N * (N + 1)
-        for i, j in ti.ndrange(N, N + 1):
+        for i, j in ti.ndrange(N, N + 1):   # the vertical edges
             idx, idx1, idx2 = start + i + j * N, i * (N + 1) + j, i * (
                 N + 1) + j + N + 1
             spring[idx] = ti.Vector([idx1, idx2])
             rest_len[idx] = (pos[idx1] - pos[idx2]).norm()
         start = 2 * N * (N + 1)
-        for i, j in ti.ndrange(N, N):
+        for i, j in ti.ndrange(N, N):   # the anti-diagonal edges
             idx, idx1, idx2 = start + i * N + j, i * (N + 1) + j, (i + 1) * (
                 N + 1) + j + 1
             spring[idx] = ti.Vector([idx1, idx2])
             rest_len[idx] = (pos[idx1] - pos[idx2]).norm()
         start = 2 * N * (N + 1) + N * N
-        for i, j in ti.ndrange(N, N):
+        for i, j in ti.ndrange(N, N):   # the diagonal edges
             idx, idx1, idx2 = start + i * N + j, i * (N + 1) + j + 1, (
                 i + 1) * (N + 1) + j
             spring[idx] = ti.Vector([idx1, idx2])
             rest_len[idx] = (pos[idx1] - pos[idx2]).norm()
 
+    # use sparse matrix builder in the types library
+    # init the mass sparse matrix
     @ti.kernel
     def init_mass_sp(self, M: ti.types.sparse_matrix_builder()):
         for i in range(self.NV):
@@ -95,12 +98,14 @@ class Cloth:
         for i in self.force:
             self.force[i] = ti.Vector([0.0, 0.0])
 
+    # the force will be cleared
     @ti.kernel
     def compute_force(self):
         self.clear_force()
+        # gravity
         for i in self.force:
             self.force[i] += self.gravity * self.mass[i]
-
+        # the spring force
         for i in self.spring:
             idx1, idx2 = self.spring[i][0], self.spring[i][1]
             pos1, pos2 = self.pos[idx1], self.pos[idx2]
@@ -177,7 +182,7 @@ class Cloth:
         K = self.KBuilder.build()
 
         A = self.M - h * D - h**2 * K
-
+        # to a big big linear problem
         vel = self.vel.to_numpy().reshape(2 * self.NV)
         force = self.force.to_numpy().reshape(2 * self.NV)
         b = (force + h * K @ vel) * h
