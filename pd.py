@@ -61,11 +61,29 @@ def meshing():
         tetrahedrons[tid][2] = ijk_2_index(i + 1, j + 1, k)
         tetrahedrons[tid][3] = ijk_2_index(i + 1, j, k + 1)
 
-        tid = k * (N_x - 1) * (N_y - 1) + i * (N_y - 1) + j + 1
-        tetrahedrons[tid][0] = ijk_2_index(i, j + 1)
-        tetrahedrons[tid][1] = ijk_2_index(i + 1, j + 1)
-        tetrahedrons[tid][2] = ijk_2_index(i + 1, j)
-        tetrahedrons[tid][3] =
+        tid += 1
+        tetrahedrons[tid][0] = ijk_2_index(i, j, k)
+        tetrahedrons[tid][1] = ijk_2_index(i, j + 1, k)
+        tetrahedrons[tid][2] = ijk_2_index(i + 1, j + 1, k)
+        tetrahedrons[tid][3] = ijk_2_index(i, j + 1, k + 1)
+
+        tid += 1
+        tetrahedrons[tid][0] = ijk_2_index(i, j, k)
+        tetrahedrons[tid][1] = ijk_2_index(i, j, k + 1)
+        tetrahedrons[tid][2] = ijk_2_index(i, j + 1, k + 1)
+        tetrahedrons[tid][3] = ijk_2_index(i + 1, j, k + 1)
+
+        tid += 1
+        tetrahedrons[tid][0] = ijk_2_index(i + 1, j + 1, k)
+        tetrahedrons[tid][1] = ijk_2_index(i + 1, j + 1, k + 1)
+        tetrahedrons[tid][2] = ijk_2_index(i + 1, j, k + 1)
+        tetrahedrons[tid][3] = ijk_2_index(i, j + 1, k + 1)
+
+        tid += 1
+        tetrahedrons[tid][0] = ijk_2_index(i, j, k)
+        tetrahedrons[tid][1] = ijk_2_index(i + 1, j + 1, k)
+        tetrahedrons[tid][2] = ijk_2_index(i + 1, j, k + 1)
+        tetrahedrons[tid][3] = ijk_2_index(i, j + 1, k + 1)
 
     # setting up edges
     # edge id
