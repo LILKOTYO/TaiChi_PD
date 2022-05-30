@@ -46,7 +46,7 @@ edges = ti.Vector.field(2, ti.i32, N_edges)
 
 
 @ti.func
-def ijk_2_index(i, j, k): return k * N_x * N_y + i * N_y + j
+def ijk_2_index(i, j, k): return k * N_x * N_y + j * N_x + i
 
 
 # -----------------------meshing and init----------------------------
@@ -89,25 +89,46 @@ def meshing():
     # edge id
     eid_base = 0
 
-    # horizontal edges
+    # axis-x edges
     for i in range(N_x-1):
-        for j in range(N_y):
-            eid = eid_base+i*N_y+j
-            edges[eid] = [ij_2_index(i, j), ij_2_index(i+1, j)]
+        for j, k in ti.ndrange(N_y, N_z):
+            eid = eid_base + k * (N_x - 1) * N_y + j * (N_x - 1) + i
+            edges[eid] = [ijk_2_index(i, j, k), ijk_2_index(i + 1, j, k)]
 
-    eid_base += (N_x-1)*N_y
-    # vertical edges
+    eid_base += (N_x - 1) * N_y * N_z
+    # axis-y edges
+    for j in range(N_y-1):
+        for i, k in ti.ndrange(N_x, N_z):
+            eid = eid_base + k * (N_y - 1) * N_x + i * (N_y - 1) + j
+            edges[eid] = [ijk_2_index(i, j, k), ijk_2_index(i, j + 1, k)]
+
+    eid_base += N_x * (N_y - 1) * N_z
+    # axis-z edges
+    for k in range(N_z-1):
+        for i, j in ti.ndrange(N_x, N_y):
+            eid = eid_base + i * (N_z - 1) * N_y + j * (N_z - 1) + k
+            edges[eid] = [ijk_2_index(i, j, k), ijk_2_index(i, j, k + 1)]
+
+    eid_base += N_x * N_y * (N_z - 1)
+    # diagonal_xy
+    for k in range(N_z):
+        for i, j in ti.ndrange(N_x-1, N_y-1):
+            eid = eid_base + k * (N_x - 1) * (N_y - 1) + j * (N_x - 1) + i
+            edges[eid] = [ijk_2_index(i, j, k), ijk_2_index(i + 1, j + 1, k)]
+
+    eid_base += (N_x - 1) * (N_y - 1) * N_z
+    # diagonal_xz
+    for j in range(N_y):
+        for i, k in ti.ndrange(N_x-1, N_z-1):
+            eid = eid_base + j * (N_x - 1) * (N_z - 1) + k * (N_x - 1) + i
+            edges[eid] = [ijk_2_index(i, j, k), ijk_2_index(i + 1, j, k + 1)]
+
+    eid_base += (N_x - 1) * N_y * (N_z - 1)
+    # diagonal_yz
     for i in range(N_x):
-        for j in range(N_y-1):
-            eid = eid_base+i*(N_y-1)+j
-            edges[eid] = [ij_2_index(i, j), ij_2_index(i, j+1)]
-
-    eid_base += N_x*(N_y-1)
-    # diagonal edges
-    for i in range(N_x-1):
-        for j in range(N_y-1):
-            eid = eid_base+i*(N_y-1)+j
-            edges[eid] = [ij_2_index(i+1, j), ij_2_index(i, j+1)]
+        for j, k in ti.ndrange(N_y-1, N_z-1):
+            eid = eid_base + i * (N_y - 1) * (N_z - 1) + j * (N_z - 1) + k
+            edges[eid] = [ijk_2_index(i, j, k), ijk_2_index(i, j + 1, k + 1)]
 
 @ti.kernel
 def initialize():
