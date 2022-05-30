@@ -135,18 +135,19 @@ def initialize():
     YoungsModulus[None] = 1e6
     paused = True
     # init position and velocity
-    for i, j in ti.ndrange(N_x, N_y):
-        index = ij_2_index(i, j)
-        x[index] = ti.Vector([init_x + i * dx, init_y + j * dx])
-        v[index] = ti.Vector([0.0, 0.0])
+    for i, j, k in ti.ndrange(N_x, N_y, N_z):
+        index = ijk_2_index(i, j, k)
+        x[index] = ti.Vector([init_x + i * dx, init_y + j * dx, init_z + k * dx])
+        v[index] = ti.Vector([0.0, 0.0, 0.0])
 
 # both Ds and Dm?         F = DsDm^-1
 @ti.func
 def compute_D(i):
-    a = triangles[i][0]
-    b = triangles[i][1]
-    c = triangles[i][2]
-    return ti.Matrix.cols([x[b] - x[a], x[c] - x[a]])
+    a = tetrahedrons[i][0]
+    b = tetrahedrons[i][1]
+    c = tetrahedrons[i][2]
+    d = tetrahedrons[i][3]
+    return ti.Matrix.cols([x[b] - x[a], x[c] - x[a], x[d] - x[a]])
 
 @ti.kernel
 def initialize_elements():
