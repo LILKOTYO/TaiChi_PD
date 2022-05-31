@@ -2,18 +2,34 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-dim_length = 63
-dim_width = 63
-dim_height = 63
 
+x = ti.Vector.field(3, ti.f32, 5)
 
 @ti.kernel
-def test():
-    I = ti.Matrix([[1.0, 2.0], [3.0, 4.0]])
-    print(I)
+def fill_in():
+    for i in range(5):
+        a = float(i)
+        x[i] = ti.Vector([a, a, a])
 
 
-test()
+fill_in()
+print(x)
+xa = x[2] - x[0]
+print(xa)
+xd = (x[2].cross(x[1])).dot(x[3])
+print(xd)
+# dim_length = 63
+# dim_width = 63
+# dim_height = 63
+#
+#
+# @ti.kernel
+# def test():
+#     I = ti.Matrix([[1.0, 2.0], [3.0, 4.0]])
+#     print(I)
+#
+#
+# test()
 # spring = ti.Vector.field(2, ti.i32, dim_height)
 #
 #

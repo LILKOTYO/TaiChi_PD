@@ -149,16 +149,27 @@ def compute_D(i):
     d = tetrahedrons[i][3]
     return ti.Matrix.cols([x[b] - x[a], x[c] - x[a], x[d] - x[a]])
 
+# @ti.func
+# def compute_V0(i):
+#     a = tetrahedrons[i][0]
+#     b = tetrahedrons[i][1]
+#     c = tetrahedrons[i][2]
+#     d = tetrahedrons[i][3]
+#     ab = x[b] - x[a]
+#     ac = x[c] - x[a]
+#     ad = x[d] - x[a]
+#     return ti.abs((ab.cross(ac)).dot(ad))
+
 @ti.kernel
 def initialize_elements():
-    for i in range(N_triangles):
+    for i in range(N_tetrahedron):
         Dm = compute_D(i)
         elements_Dm_inv[i] = Dm.inverse()
-        elements_V0[i] = ti.abs(Dm.determinant())/2
+        elements_V0[i] = ti.abs(Dm.determinant())/6
 
 # ----------------------core-----------------------------
 @ti.func
-def compute_R_2D(F):
+def compute_R_3D(F):
     R, S = ti.polar_decompose(F, ti.f32)
     return R
 
@@ -166,40 +177,42 @@ def compute_R_2D(F):
 def compute_gradient():
     # clear gradient
     for i in grad:
-        grad[i] = ti.Vector([0, 0])
+        grad[i] = ti.Vector([0, 0, 0])
 
     # gradient of elastic potential
-    for i in range(N_triangles):
+    for i in range(N_tetrahedron):
         Ds = compute_D(i)
         # elements_Dm_inv is initialized in the function named initialize_elements()
         F = Ds@elements_Dm_inv[i]
         # co-rotated linear elasticity
-        R = compute_R_2D(F)
-        Eye = ti.Matrix.cols([[1.0, 0.0], [0.0, 1.0]])
+        R = compute_R_3D(F)
+        Eye = ti.Matrix.cols([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
         # first Piola-Kirchhoff tensor
         P = 2*LameMu[None]*(F-R) + LameLa[None]*((R.transpose())@F-Eye).trace()*R
         # assemble to gradient
         # H is the derivative of energy to the position
         H = elements_V0[i] * P @ (elements_Dm_inv[i].transpose())
-        a,b,c = triangles[i][0],triangles[i][1],triangles[i][2]
-        gb = ti.Vector([H[0,0], H[1, 0]])
-        gc = ti.Vector([H[0,1], H[1, 1]])
-        ga = -gb-gc
+        a, b, c, d = tetrahedrons[i][0],tetrahedrons[i][1],tetrahedrons[i][2], tetrahedrons[i][3]
+        gb = ti.Vector([H[0, 0], H[1, 0], H[2, 0]])
+        gc = ti.Vector([H[0, 1], H[1, 1], H[2, 1]])
+        gd = ti.Vector([H[0, 2], H[1, 2], H[2, 2]])
+        ga = -gb - gc - gd
         grad[a] += ga
         grad[b] += gb
         grad[c] += gc
+        grad[d] += gd
 
-@ti.kernel
-def compute_total_energy():
-    for i in range(N_triangles):
-        Ds = compute_D(i)
-        F = Ds @ elements_Dm_inv[i]
-        # co-rotated linear elasticity
-        R = compute_R_2D(F)
-        Eye = ti.Matrix.cols([[1.0, 0.0], [0.0, 1.0]])
-        element_energy_density = LameMu[None]*((F-R)@(F-R).transpose()).trace() + 0.5*LameLa[None]*(R.transpose()@F-Eye).trace()**2
-
-        total_energy[None] += element_energy_density * elements_V0[i]
+# @ti.kernel
+# def compute_total_energy():
+#     for i in range(N_tetrahedron):
+#         Ds = compute_D(i)
+#         F = Ds @ elements_Dm_inv[i]
+#         # co-rotated linear elasticity
+#         R = compute_R_2D(F)
+#         Eye = ti.Matrix.cols([[1.0, 0.0], [0.0, 1.0]])
+#         element_energy_density = LameMu[None]*((F-R)@(F-R).transpose()).trace() + 0.5*LameLa[None]*(R.transpose()@F-Eye).trace()**2
+#
+#         total_energy[None] += element_energy_density * elements_V0[i]
 
 @ti.kernel
 def update():
@@ -218,7 +231,7 @@ def update():
 
     # enforce boundary condition
     for j in range(N_y):
-        ind = ij_2_index(0, j)
+        ind = ijk_2_index(0, j)
         v[ind] = ti.Vector([0, 0])
         x[ind] = ti.Vector([init_x, init_y + j * dx])  # rest pose attached to the wall
 
