@@ -1,7 +1,7 @@
 import taichi as ti
 ti.init(arch=ti.cuda)
 
-N = 128
+N = 256
 cell_size = 1.0 / N
 gravity = 0.5
 stiffness = 1600
