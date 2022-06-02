@@ -2,22 +2,22 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-
-x = ti.Vector.field(3, ti.f32, 5)
-
-@ti.kernel
-def fill_in():
-    for i in range(5):
-        a = float(i)
-        x[i] = ti.Vector([a, a, a])
-
-
-fill_in()
-print(x)
-xa = x[2] - x[0]
-print(xa)
-xd = (x[2].cross(x[1])).dot(x[3])
-print(xd)
+x = ti.Vector(3, ti.f32)
+# x = ti.Vector.field(3, ti.f32, 5)
+#
+# @ti.kernel
+# def fill_in():
+#     for i in range(5):
+#         a = float(i)
+#         x[i] = ti.Vector([a, a, a])
+#
+#
+# fill_in()
+# print(x)
+# xa = x[2] - x[0]
+# print(xa)
+# xd = (x[2].cross(x[1])).dot(x[3])
+# print(xd)
 # dim_length = 63
 # dim_width = 63
 # dim_height = 63

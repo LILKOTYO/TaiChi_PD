@@ -3,7 +3,7 @@ import math
 
 ti.init(arch=ti.gpu)
 
-# procedurally setting up the cantilever
+# init
 init_x, init_y, init_z = 0.3, 0.3, 0.3
 N_x = 10
 N_y = 10
