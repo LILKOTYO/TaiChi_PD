@@ -1,4 +1,5 @@
 import taichi as ti
+import numpy as np
 import math
 
 ti.init(arch=ti.cpu)
@@ -64,11 +65,9 @@ ti.root.dense(ti.i, 5).dense(ti.i, 4).dense(ti.j, 3).place(dF)
 # cause by the change of the j-th component in the i-th node
 ti.root.dense(ti.i, N_tetrahedron).dense(ti.i, 4).dense(ti.j, 3).place(dP, dH)
 
-# df/dx
-K_builder = ti.linalg.SparseMatrixBuilder(3*N, 3*N, max_num_triplets=9*N*N)
-
 # for solving system of linear equations
-A_builder = ti.linalg.SparseMatrixBuilder(3*N, 3*N, max_num_triplets=9*N*N)
+
+KA_builder = ti.linalg.SparseMatrixBuilder(3*N, 3*N, max_num_triplets=9*N*N)
 b = ti.field(ti.f32, shape=3*N)
 x = ti.field(ti.f32, shape=3*N)
 
@@ -157,6 +156,12 @@ def meshing():
             eid = eid_base + i * (N_y - 1) * (N_z - 1) + j * (N_z - 1) + k
             edges[eid] = [ijk_2_index(i, j, k), ijk_2_index(i, j + 1, k + 1)]
 
+@ti.kernel
+def updateLameCoeff():
+    E = YoungsModulus[None]
+    nu = PoissonsRatio[None]
+    LameLa[None] = E*nu / ((1+nu)*(1-2*nu))
+    LameMu[None] = E / (2*(1+nu))
 
 @ti.kernel
 def initialize():
@@ -310,4 +315,6 @@ def compute_K(K_tri: ti.linalg.sparse_matrix_builder()):
 
 
 @ti.kernel
-def assembly_linear_system():
+def solve_linear_system(A_tri: ti.linalg.sparse_matrix_builder()):
+    dh_inv = 1 / dh
+    # 用numpy构建动态二维数组，记录triplets的位置
