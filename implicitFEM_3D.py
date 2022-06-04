@@ -17,9 +17,9 @@ class Object:
         self.init_x = 0.3
         self.init_y = 0.3
         self.init_z = 0.3
-        self.N_x = 3
-        self.N_y = 3
-        self.N_z = 3
+        self.N_x = 6
+        self.N_y = 6
+        self.N_z = 6
         self.N = self.N_x * self.N_y * self.N_z
         # axis-x + axis-y + axis-z + diagonal_xy + diagonal_xz + diagonal_yz
         self.N_edges = (self.N_x - 1) * self.N_y * self.N_z + (self.N_y - 1) * self.N_x * self.N_z + (self.N_z - 1) * self.N_x * self.N_y \
