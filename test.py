@@ -2,7 +2,24 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-x = ti.Vector(3, ti.f32)
+z = 3
+print(z**2)
+
+
+# z = 1
+# x = []
+# print(x)
+# x.append([2, 0])
+# print(x)
+# x.append([2, z * 5])
+# print(x)
+# x.append([2, 2])
+# print(x)
+#
+# for i in range(len(x)):
+#     print(x[i][0])
+
+# x = ti.Vector(3, ti.f32)
 # x = ti.Vector.field(3, ti.f32, 5)
 #
 # @ti.kernel
