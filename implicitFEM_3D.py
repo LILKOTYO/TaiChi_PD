@@ -25,6 +25,9 @@ class Object:
         self.N_edges = (self.N_x - 1) * self.N_y * self.N_z + (self.N_y - 1) * self.N_x * self.N_z + (self.N_z - 1) * self.N_x * self.N_y \
                   + (self.N_x - 1) * (self.N_y - 1) * self.N_z + (self.N_x - 1) * (self.N_z - 1) * self.N_y + (self.N_y - 1) * (self.N_z - 1) * self.N_x
         self.N_tetrahedron = 5 * (self.N_x - 1) * (self.N_y - 1) * (self.N_z - 1)
+        self.N_faces = 4 * (self.N_x - 1) * (self.N_y - 1) \
+                       + 4 * (self.N_x - 1) * (self.N_z - 1) \
+                       + 4 * (self.N_y - 1) * (self.N_z - 1)
         self.dx = 0.5 / self.N_x
 
         # physical quantities
@@ -36,7 +39,7 @@ class Object:
         self.LameLa = ti.field(ti.f32, ())
 
         # time-step size (for simulation, 16.7ms)
-        self.h = 0.5
+        self.h = 0.2
         # sub-step
         self.N_substeps = 100
         # time-step size (for time integration)
@@ -57,7 +60,8 @@ class Object:
 
         # geometric components
         self.tetrahedrons = ti.Vector.field(4, ti.i32, self.N_tetrahedron)
-        self.edges = ti.Vector.field(2, ti.i32, self.N_edges)
+        # self.edges = ti.Vector.field(2, ti.i32, self.N_edges)
+        self.faces = ti.field(ti.i32, self.N_faces * 3)
 
         # derivatives
         self.dD = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(4, 3))
@@ -76,8 +80,8 @@ class Object:
         x = ti.field(ti.f32, shape=3 * self.N)
 
         self.meshing()
-        self.updateLameCoeff()
         self.initialize()
+        self.updateLameCoeff()
         self.initialize_elements()
 
     @ti.func
@@ -120,50 +124,101 @@ class Object:
             self.tetrahedrons[tid][2] = self.ijk_2_index(i + 1, j + 1, k + 1)
             self.tetrahedrons[tid][3] = self.ijk_2_index(i, j + 1, k)
 
-        # setting up edges
-        # edge id
-        eid_base = 0
+        # init faces
+        fid = 0
+        for i, j in ti.ndrange(self.N_x-1, self.N_y-1):
+            self.faces[fid + 0] = self.ijk_2_index(i, j, 0)
+            self.faces[fid + 1] = self.ijk_2_index(i + 1, j, 0)
+            self.faces[fid + 2] = self.ijk_2_index(i + 1, j + 1, 0)
+            self.faces[fid + 3] = self.ijk_2_index(i, j, 0)
+            self.faces[fid + 4] = self.ijk_2_index(i + 1, j + 1, 0)
+            self.faces[fid + 5] = self.ijk_2_index(i, j + 1, 0)
 
-        # axis-x edges
-        for i in range(self.N_x - 1):
-            for j, k in ti.ndrange(self.N_y, self.N_z):
-                eid = eid_base + k * (self.N_x - 1) * self.N_y + j * (self.N_x - 1) + i
-                self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j, k)]
+            self.faces[fid + 6] = self.ijk_2_index(i, j, self.N_z - 1)
+            self.faces[fid + 7] = self.ijk_2_index(i + 1, j, self.N_z - 1)
+            self.faces[fid + 8] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
+            self.faces[fid + 9] = self.ijk_2_index(i, j, self.N_z - 1)
+            self.faces[fid + 10] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
+            self.faces[fid + 11] = self.ijk_2_index(i, j + 1, self.N_z - 1)
+            fid += 12
 
-        eid_base += (self.N_x - 1) * self.N_y * self.N_z
-        # axis-y edges
-        for j in range(self.N_y - 1):
-            for i, k in ti.ndrange(self.N_x, self.N_z):
-                eid = eid_base + k * (self.N_y - 1) * self.N_x + i * (self.N_y - 1) + j
-                self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j + 1, k)]
+        for i, k in ti.ndrange(self.N_x-1, self.N_z-1):
+            self.faces[fid + 0] = self.ijk_2_index(i, 0, k)
+            self.faces[fid + 1] = self.ijk_2_index(i + 1, 0, k)
+            self.faces[fid + 2] = self.ijk_2_index(i, 0, k + 1)
+            self.faces[fid + 3] = self.ijk_2_index(i, 0, k + 1)
+            self.faces[fid + 4] = self.ijk_2_index(i + 1, 0, k)
+            self.faces[fid + 5] = self.ijk_2_index(i + 1, 0, k + 1)
 
-        eid_base += self.N_x * (self.N_y - 1) * self.N_z
-        # axis-z edges
-        for k in range(self.N_z - 1):
-            for i, j in ti.ndrange(self.N_x, self.N_y):
-                eid = eid_base + i * (self.N_z - 1) * self.N_y + j * (self.N_z - 1) + k
-                self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j, k + 1)]
+            self.faces[fid + 6] = self.ijk_2_index(i, self.N_y - 1, k)
+            self.faces[fid + 7] = self.ijk_2_index(i + 1, self.N_y - 1, k)
+            self.faces[fid + 8] = self.ijk_2_index(i, self.N_y - 1, k + 1)
+            self.faces[fid + 9] = self.ijk_2_index(i, self.N_y - 1, k + 1)
+            self.faces[fid + 10] = self.ijk_2_index(i + 1, self.N_y - 1, k)
+            self.faces[fid + 11] = self.ijk_2_index(i + 1, self.N_y - 1, k + 1)
+            fid += 12
 
-        eid_base += self.N_x * self.N_y * (self.N_z - 1)
-        # diagonal_xy
-        for k in range(self.N_z):
-            for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
-                eid = eid_base + k * (self.N_x - 1) * (self.N_y - 1) + j * (self.N_x - 1) + i
-                self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j + 1, k)]
+        for j, k in ti.ndrange(self.N_y-1, self.N_z-1):
+            self.faces[fid + 0] = self.ijk_2_index(0, j, k)
+            self.faces[fid + 1] = self.ijk_2_index(0, j, k + 1)
+            self.faces[fid + 2] = self.ijk_2_index(0, j + 1, k)
+            self.faces[fid + 3] = self.ijk_2_index(0, j + 1, k)
+            self.faces[fid + 4] = self.ijk_2_index(0, j, k + 1)
+            self.faces[fid + 5] = self.ijk_2_index(0, j + 1, k + 1)
 
-        eid_base += (self.N_x - 1) * (self.N_y - 1) * self.N_z
-        # diagonal_xz
-        for j in range(self.N_y):
-            for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
-                eid = eid_base + j * (self.N_x - 1) * (self.N_z - 1) + k * (self.N_x - 1) + i
-                self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j, k + 1)]
+            self.faces[fid + 6] = self.ijk_2_index(self.N_x - 1, j, k)
+            self.faces[fid + 7] = self.ijk_2_index(self.N_x - 1, j, k + 1)
+            self.faces[fid + 8] = self.ijk_2_index(self.N_x - 1, j + 1, k)
+            self.faces[fid + 9] = self.ijk_2_index(self.N_x - 1, j + 1, k)
+            self.faces[fid + 10] = self.ijk_2_index(self.N_x - 1, j, k + 1)
+            self.faces[fid + 11] = self.ijk_2_index(self.N_x - 1, j + 1, k + 1)
+            fid += 12
 
-        eid_base += (self.N_x - 1) * self.N_y * (self.N_z - 1)
-        # diagonal_yz
-        for i in range(self.N_x):
-            for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
-                eid = eid_base + i * (self.N_y - 1) * (self.N_z - 1) + j * (self.N_z - 1) + k
-                self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j + 1, k + 1)]
+
+        # # setting up edges
+        # # edge id
+        # eid_base = 0
+        #
+        # # axis-x edges
+        # for i in range(self.N_x - 1):
+        #     for j, k in ti.ndrange(self.N_y, self.N_z):
+        #         eid = eid_base + k * (self.N_x - 1) * self.N_y + j * (self.N_x - 1) + i
+        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j, k)]
+        #
+        # eid_base += (self.N_x - 1) * self.N_y * self.N_z
+        # # axis-y edges
+        # for j in range(self.N_y - 1):
+        #     for i, k in ti.ndrange(self.N_x, self.N_z):
+        #         eid = eid_base + k * (self.N_y - 1) * self.N_x + i * (self.N_y - 1) + j
+        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j + 1, k)]
+        #
+        # eid_base += self.N_x * (self.N_y - 1) * self.N_z
+        # # axis-z edges
+        # for k in range(self.N_z - 1):
+        #     for i, j in ti.ndrange(self.N_x, self.N_y):
+        #         eid = eid_base + i * (self.N_z - 1) * self.N_y + j * (self.N_z - 1) + k
+        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j, k + 1)]
+        #
+        # eid_base += self.N_x * self.N_y * (self.N_z - 1)
+        # # diagonal_xy
+        # for k in range(self.N_z):
+        #     for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
+        #         eid = eid_base + k * (self.N_x - 1) * (self.N_y - 1) + j * (self.N_x - 1) + i
+        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j + 1, k)]
+        #
+        # eid_base += (self.N_x - 1) * (self.N_y - 1) * self.N_z
+        # # diagonal_xz
+        # for j in range(self.N_y):
+        #     for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
+        #         eid = eid_base + j * (self.N_x - 1) * (self.N_z - 1) + k * (self.N_x - 1) + i
+        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j, k + 1)]
+        #
+        # eid_base += (self.N_x - 1) * self.N_y * (self.N_z - 1)
+        # # diagonal_yz
+        # for i in range(self.N_x):
+        #     for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
+        #         eid = eid_base + i * (self.N_y - 1) * (self.N_z - 1) + j * (self.N_z - 1) + k
+        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j + 1, k + 1)]
 
     @ti.kernel
     def updateLameCoeff(self):
@@ -174,7 +229,8 @@ class Object:
 
     @ti.kernel
     def initialize(self):
-        self.YoungsModulus[None] = 1e3
+        self.YoungsModulus[None] = 1e4
+        self.PoissonsRatio[None] = 0
         # init position and velocity
         for i, j, k in ti.ndrange(self.N_x, self.N_y, self.N_z):
             index = self.ijk_2_index(i, j, k)
@@ -233,6 +289,8 @@ class Object:
         F = self.compute_F(i)
         F_T = F.inverse().transpose()
         J = max(F.determinant(), 0.01)
+        if i == 4:
+            print(self.LameMu[None] * (F - F_T))
         return self.LameMu[None] * (F - F_T) + self.LameLa[None] * ti.log(J) * F_T
 
 
@@ -253,7 +311,6 @@ class Object:
             loc_id = i % 5
             P = self.compute_P(i)
             H = - self.elements_V0[loc_id] * (P @ self.elements_Dm_inv[loc_id].transpose())
-            print(H)
             h1 = ti.Vector([H[0, 0], H[1, 0], H[2, 0]])
             h2 = ti.Vector([H[0, 1], H[1, 1], H[2, 1]])
             h3 = ti.Vector([H[0, 2], H[1, 2], H[2, 2]])
@@ -409,6 +466,7 @@ window = ti.ui.Window("FEM Simulation", (800, 800), vsync=True)
 canvas = window.get_canvas()
 scene = ti.ui.Scene()
 camera = ti.ui.make_camera()
+canvas.set_background_color((0.2, 0.2, 0.3))
 while window.running:
     for frame in range(30):
         cube.update()
@@ -419,6 +477,7 @@ while window.running:
     scene.set_camera(camera)
 
     scene.point_light(pos=(0.5, 1, 2), color=(1, 1, 1))
-    scene.particles(cube.x, radius=0.005, color=(0.8, 0.8, 0.8))
+    scene.particles(cube.x, radius=0.002, color=(0.8, 0.8, 0.8))
+    scene.mesh(cube.x, cube.faces, color=(0.5, 0.5, 0.5))
     canvas.scene(scene)
     window.show()
