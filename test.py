@@ -2,8 +2,8 @@ import taichi as ti
 
 ti.init(arch=ti.gpu)
 
-z = 3
-print(z**2)
+K = ti.Vector.field(3, ti.f32, 2)
+print(K[0][0])
 
 
 # z = 1
