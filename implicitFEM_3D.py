@@ -174,52 +174,6 @@ class Object:
             self.faces[fid + 11] = self.ijk_2_index(self.N_x - 1, j + 1, k + 1)
             fid += 12
 
-
-        # # setting up edges
-        # # edge id
-        # eid_base = 0
-        #
-        # # axis-x edges
-        # for i in range(self.N_x - 1):
-        #     for j, k in ti.ndrange(self.N_y, self.N_z):
-        #         eid = eid_base + k * (self.N_x - 1) * self.N_y + j * (self.N_x - 1) + i
-        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j, k)]
-        #
-        # eid_base += (self.N_x - 1) * self.N_y * self.N_z
-        # # axis-y edges
-        # for j in range(self.N_y - 1):
-        #     for i, k in ti.ndrange(self.N_x, self.N_z):
-        #         eid = eid_base + k * (self.N_y - 1) * self.N_x + i * (self.N_y - 1) + j
-        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j + 1, k)]
-        #
-        # eid_base += self.N_x * (self.N_y - 1) * self.N_z
-        # # axis-z edges
-        # for k in range(self.N_z - 1):
-        #     for i, j in ti.ndrange(self.N_x, self.N_y):
-        #         eid = eid_base + i * (self.N_z - 1) * self.N_y + j * (self.N_z - 1) + k
-        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j, k + 1)]
-        #
-        # eid_base += self.N_x * self.N_y * (self.N_z - 1)
-        # # diagonal_xy
-        # for k in range(self.N_z):
-        #     for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
-        #         eid = eid_base + k * (self.N_x - 1) * (self.N_y - 1) + j * (self.N_x - 1) + i
-        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j + 1, k)]
-        #
-        # eid_base += (self.N_x - 1) * (self.N_y - 1) * self.N_z
-        # # diagonal_xz
-        # for j in range(self.N_y):
-        #     for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
-        #         eid = eid_base + j * (self.N_x - 1) * (self.N_z - 1) + k * (self.N_x - 1) + i
-        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i + 1, j, k + 1)]
-        #
-        # eid_base += (self.N_x - 1) * self.N_y * (self.N_z - 1)
-        # # diagonal_yz
-        # for i in range(self.N_x):
-        #     for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
-        #         eid = eid_base + i * (self.N_y - 1) * (self.N_z - 1) + j * (self.N_z - 1) + k
-        #         self.edges[eid] = [self.ijk_2_index(i, j, k), self.ijk_2_index(i, j + 1, k + 1)]
-
     @ti.kernel
     def updateLameCoeff(self):
         E = self.YoungsModulus[None]
@@ -347,28 +301,6 @@ class Object:
                     self.dP[k, i, j] = self.LameMu[None] * dF \
                                        + (self.LameMu[None] - self.LameLa[None] * ti.log(J)) * F_1_T @ dF.transpose() @ F_1_T \
                                        + self.LameLa[None] * (F_1_T @ dF).trace() * F_1_T
-            # for i in range(4):
-            #     for j in range(3):
-            #         for n in ti.static(range(3)):
-            #             for m in ti.static(range(3)):
-            #                 # dF/dF_{ij}
-            #                 dFdFij = ti.Matrix([[0.0, 0.0, 0.0],
-            #                                     [0.0, 0.0, 0.0],
-            #                                     [0.0, 0.0, 0.0]])
-            #                 dFdFij[n, m] = 1
-            #
-            #                 # dF^T/dF_{ij}
-            #                 dF_TdFij = dFdFij.transpose()
-            #
-            #                 # Tr( F^{-1} dF/dF_{ij} )
-            #                 dTr = F_1_T[n, m]
-            #
-            #                 dP_dFij = self.LameMu[None] * dFdFij \
-            #                           + (self.LameMu[None] - self.LameLa[None] * ti.log(J)) * F_1_T @ dF_TdFij @ F_1_T \
-            #                           + self.LameLa[None] * dTr * F_1_T
-            #                 dFij_ndim = self.dF[k, i, j][n, m]
-            #
-            #                 self.dP[k, i, j] += dP_dFij * dFij_ndim
 
             for i in range(4):
                 for j in range(3):
@@ -425,10 +357,6 @@ class Object:
             if self.x[i][1] < 0.1:
                 self.x[i][1] = 0.1
                 self.v[i][1] = 0.0
-        # for i, j, k in ti.ndrange(self.N_x-1, self.N_y, self.N_z):
-        #     idx = self.ijk_2_index(i, j, k)
-        #     self.x[idx] = self.x_new[idx]
-        #     self.v[idx] = ti.Vector([self.v_new[3*idx+0], self.v_new[3*idx+1], self.v_new[3*idx+2]])
 
     def update(self):
         dh2_inv = self.dh_inv ** 2
@@ -470,7 +398,6 @@ canvas.set_background_color((0.2, 0.2, 0.3))
 while window.running:
     for frame in range(30):
         cube.update()
-    # print matrix A to file
 
     camera.position(0.5, 0.5, 2)
     camera.lookat(0.5, 0.5, 0)
