@@ -39,6 +39,8 @@ class Object:
         self.PoissonsRatio = ti.field(ti.f32, ())
         self.LameMu = ti.field(ti.f32, ())
         self.LameLa = ti.field(ti.f32, ())
+        self.jacobi_iter = 50
+        self.jacobi_alpha = 0.1
 
         # time-step size (for simulation, 16.7ms)
         self.h = 0.2
@@ -52,11 +54,13 @@ class Object:
         # vectors and matrices
         self.x = ti.Vector.field(3, ti.f32, self.N)
         self.x_proj = ti.Vector.field(3, ti.f32, self.N)
+        self.x_iter = ti.Vector.field(3, ti.f32, self.N)
+        self.count = ti.field(ti.i32, self.N)
         self.v = ti.Vector.field(3, ti.f32, self.N)
         self.elements_Dm_inv = ti.Matrix.field(3, 3, ti.f32, 5)
         self.elements_Dm = ti.Matrix.field(3, 3, ti.f32, 5)
         self.elements_V0 = ti.field(ti.f32, 5)
-        self.f = ti.Vector.field(3, ti.f32, self.N)
+        self.f_ext = ti.Vector.field(3, ti.f32, self.N)
 
         # derivatives
         self.dD = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(4, 3))
@@ -182,7 +186,9 @@ class Object:
         for i, j, k in ti.ndrange(self.N_x, self.N_y, self.N_z):
             index = self.ijk_2_index(i, j, k)
             self.x[index] = ti.Vector([self.init_x + i * self.dx, self.init_y + j * self.dx, self.init_z + k * self.dx])
-            self.v[index] = ti.Vector([0.0, -3.0, 0.0])
+            self.x_proj[index] = ti.Vector([0.0, 0.0, 0.0])
+            self.v[index] = ti.Vector([0.0, 0.0, 0.0])
+            self.f_ext[index] = ti.Vector([0.0, -self.gravity * self.mass, 0.0])
 
     @ti.kernel
     def initialize_elements(self):
@@ -224,11 +230,33 @@ class Object:
             [self.x[q] - self.x[r], self.x[w] - self.x[r], self.x[e] - self.x[r]])
 
     @ti.func
-    def compute_F(self, i):
-        return self.compute_D(i) @ self.elements_Dm_inv[i % 5]
+    def compute_D_in_local(self, i):
+        q = self.tetrahedrons[i][0]
+        w = self.tetrahedrons[i][1]
+        e = self.tetrahedrons[i][2]
+        r = self.tetrahedrons[i][3]
+        return ti.Matrix.cols(
+            [self.x_proj[q] - self.x_proj[r], self.x_proj[w] - self.x_proj[r], self.x_proj[e] - self.x_proj[r]])
 
-    @ti.kernel
-    def local_step(self):
+    @ti.func
+    def compute_F(self, i):
+        return self.compute_D_in_local(i) @ self.elements_Dm_inv[i % 5]
+
+    @ti.func
+    def initialize_iter_vector(self):
+        for i in range(self.N):
+            self.x_proj[i] = self.x
+            self.x_iter[i] = ti.Vector([0.0, 0.0, 0.0])
+            self.count[i] = 0
+
+    @ti.func
+    def clear_iter_vector(self):
+        for i in range(self.N):
+            self.x_iter[i] = ti.Vector([0.0, 0.0, 0.0])
+            self.count[i] = 0
+
+    @ti.func
+    def jacobi(self):
         for it in range(self.N_tetrahedron):
             F = self.compute_F(it)
             U, S, V = ti.svd(F)
@@ -237,22 +265,42 @@ class Object:
             S[2, 2] = min(max(0.95, S[2, 2]), 1.05)
             F_star = U @ S @ V.transpose()
             D_star = F_star @ self.elements_Dm[it%5]
-            center = ti.Vector([0.0, 0.0, 0.0])
+
+            q = self.tetrahedrons[it][0]
+            w = self.tetrahedrons[it][1]
+            e = self.tetrahedrons[it][2]
+            r = self.tetrahedrons[it][3]
 
             # find the center of gravity
-            for n in range(4):
-                center = center + self.x[self.tetrahedrons[it][n]]
-            center = center / 4
+            center = (self.x_proj[q] + self.x_proj[w] + self.x_proj[e] + self.x_proj[r]) / 4
 
             # find the projected vector
             for n in range(3):
-                self.x_proj[self.tetrahedrons[it][3]][n] = center[n] - (D_star[n, 0] + D_star[n, 1] + D_star[n, 2]) / 4
-                self.x_proj[self.tetrahedrons[it][0]][n] = self.x_proj[self.tetrahedrons[it][3]][n] + D_star[n, 0]
-                self.x_proj[self.tetrahedrons[it][1]][n] = self.x_proj[self.tetrahedrons[it][3]][n] + D_star[n, 1]
-                self.x_proj[self.tetrahedrons[it][2]][n] = self.x_proj[self.tetrahedrons[it][3]][n] + D_star[n, 2]
+                x3_new = center[n] - (D_star[n, 0] + D_star[n, 1] + D_star[n, 2]) / 4
+                self.x_iter[r][n] += x3_new
+                self.x_iter[q][n] += x3_new + D_star[n, 0]
+                self.x_iter[w][n] += x3_new + D_star[n, 1]
+                self.x_iter[e][n] += x3_new + D_star[n, 2]
 
+            self.count[q] += 1
+            self.count[w] += 1
+            self.count[e] += 1
+            self.count[r] += 1
 
+        for i in range(self.N):
+            self.x_proj[i] = (self.x_iter[i] + self.jacobi_alpha * self.x_proj[i]) / (self.count[i] + self.jacobi_alpha)
+
+    @ti.kernel
+    def local_step(self):
+        self.initialize_iter_vector()
+        # Jacobi Solver
+        for k in self.jacobi_iter:
+            self.clear_iter_vector()
+            self.jacobi()
+
+    @ti.kernel
+    def global_step(self):
 
 
     def update(self):
-
+        self.local_step()

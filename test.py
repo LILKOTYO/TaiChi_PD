@@ -6,8 +6,8 @@ ti.init(arch=ti.gpu)
 
 center = ti.Vector([0.0, 0.0, 0.0])
 a = ti.Vector([0.0, 3.0, 0.0])
-center = center + a
-center = center / 4
+print(center)
+center.copy_from(a)
 print(center)
 # n = 10
 # ex = np.ones(n)
