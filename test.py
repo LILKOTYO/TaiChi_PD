@@ -1,9 +1,27 @@
 import taichi as ti
+import numpy as np
+from scipy.sparse import dia_matrix
 
 ti.init(arch=ti.gpu)
 
-K = ti.Vector.field(3, ti.f32, 2)
-print(K[0][0])
+center = ti.Vector([0.0, 0.0, 0.0])
+a = ti.Vector([0.0, 3.0, 0.0])
+center = center + a
+center = center / 4
+print(center)
+# n = 10
+# ex = np.ones(n)
+# data = np.array([ex, 2 * ex, ex])
+# offsets_a = np.array([-1, 0, 1])
+# A = dia_matrix((data, offsets_a), shape=(n, n))
+# offsets_i = np.array([0])
+# I = dia_matrix((ex, offsets_i), shape=(n, n))
+# print(I.toarray())
+# B = A @ I
+# print(B.toarray())
+
+# K = ti.Vector.field(3, ti.f32, 2)
+# print(K[0][0])
 
 
 # z = 1

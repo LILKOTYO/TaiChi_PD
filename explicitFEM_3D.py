@@ -6,8 +6,8 @@ ti.init(arch=ti.gpu)
 # init
 init_x, init_y, init_z = 0.3, 0.3, 0.3
 N_x = 10
-N_y = 10
-N_z = 10
+N_y = 3
+N_z = 3
 # N_x = 2
 # N_y = 2
 N = N_x * N_y * N_z
@@ -132,7 +132,7 @@ def meshing():
 
 @ti.kernel
 def initialize():
-    YoungsModulus[None] = 5e5
+    YoungsModulus[None] = 1e4
     paused = True
     # init position and velocity
     for i, j, k in ti.ndrange(N_x, N_y, N_z):

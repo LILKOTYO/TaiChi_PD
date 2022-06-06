@@ -1,4 +1,5 @@
 import taichi as ti
+from scipy.sparse import linalg
 import numpy as np
 import math
 
@@ -17,9 +18,9 @@ class Object:
         self.init_x = 0.3
         self.init_y = 0.3
         self.init_z = 0.3
-        self.N_x = 6
-        self.N_y = 6
-        self.N_z = 6
+        self.N_x = 3
+        self.N_y = 3
+        self.N_z = 3
         self.N = self.N_x * self.N_y * self.N_z
         # axis-x + axis-y + axis-z + diagonal_xy + diagonal_xz + diagonal_yz
         self.N_edges = (self.N_x - 1) * self.N_y * self.N_z + (self.N_y - 1) * self.N_x * self.N_z + (self.N_z - 1) * self.N_x * self.N_y \
@@ -190,7 +191,7 @@ class Object:
             index = self.ijk_2_index(i, j, k)
             self.x[index] = ti.Vector([self.init_x + i * self.dx, self.init_y + j * self.dx, self.init_z + k * self.dx])
             self.x_new[index] = ti.Vector([self.init_x + i * self.dx, self.init_y + j * self.dx, self.init_z + k * self.dx])
-            self.v[index] = ti.Vector([0.0, 0.0, 0.0])
+            self.v[index] = ti.Vector([0.0, -3.0, 0.0])
             self.v_new[index + 0] = 0.0
             self.v_new[index + 1] = 0.0
             self.v_new[index + 2] = 0.0
@@ -243,8 +244,6 @@ class Object:
         F = self.compute_F(i)
         F_T = F.inverse().transpose()
         J = max(F.determinant(), 0.01)
-        if i == 4:
-            print(self.LameMu[None] * (F - F_T))
         return self.LameMu[None] * (F - F_T) + self.LameLa[None] * ti.log(J) * F_T
 
 
@@ -348,15 +347,19 @@ class Object:
             self.v_new[3 * i + 0] += dx[3 * i + 0] * self.dh_inv
             self.v_new[3 * i + 1] += dx[3 * i + 1] * self.dh_inv
             self.v_new[3 * i + 2] += dx[3 * i + 2] * self.dh_inv
+            if self.x_new[i][1] < 0.1:
+                self.x_new[i][1] = 0.1
+                if self.v_new[3 * i + 1] < 0.0:
+                    self.v_new[3 * i + 1] = 0.0
 
     @ti.kernel
     def updatePosVel(self):
         for i in range(self.N):
             self.x[i] = self.x_new[i]
             self.v[i] = ti.Vector([self.v_new[3*i+0], self.v_new[3*i+1], self.v_new[3*i+2]])
-            if self.x[i][1] < 0.1:
-                self.x[i][1] = 0.1
-                self.v[i][1] = 0.0
+            # if self.x[i][1] < 0.1:
+            #     self.x[i][1] = 0.1
+            #     self.v[i][1] = -self.v[i][1] * 0.8
 
     def update(self):
         dh2_inv = self.dh_inv ** 2
@@ -368,8 +371,6 @@ class Object:
             K = self.K_builder.build()
             # assemble A
             A = (1 + self.LameLa[None] * self.dh_inv) * K + dh2_inv * self.M
-            # print(self.M)
-            # exit()
             # assemble b
             velocity_new = self.v_new.to_numpy()
             f_d = -self.LameLa[None] * K @ velocity_new
