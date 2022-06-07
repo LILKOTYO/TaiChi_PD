@@ -396,6 +396,8 @@ canvas = window.get_canvas()
 scene = ti.ui.Scene()
 camera = ti.ui.make_camera()
 canvas.set_background_color((0.2, 0.2, 0.3))
+
+wait = input("PRESS ENTER TO CONTINUE.")
 while window.running:
     for frame in range(30):
         cube.update()

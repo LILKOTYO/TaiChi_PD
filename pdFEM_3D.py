@@ -1,14 +1,8 @@
 import taichi as ti
 from scipy.sparse import dia_matrix, csc_matrix, linalg
 import numpy as np
-import math
 
 ti.init(arch=ti.gpu)
-
-# simulation components
-scalar = lambda: ti.field(dtype=ti.f32)
-vec = lambda: ti.Vector.field(3, dtype=ti.f32)
-mac3x3 = lambda: ti.Matrix.field(3, 3, dtype=ti.f32)
 
 
 @ti.data_oriented
@@ -22,11 +16,6 @@ class Object:
         self.N_y = 3
         self.N_z = 3
         self.N = self.N_x * self.N_y * self.N_z
-        # axis-x + axis-y + axis-z + diagonal_xy + diagonal_xz + diagonal_yz
-        # self.N_edges = (self.N_x - 1) * self.N_y * self.N_z + (self.N_y - 1) * self.N_x * self.N_z + (
-        #             self.N_z - 1) * self.N_x * self.N_y \
-        #                + (self.N_x - 1) * (self.N_y - 1) * self.N_z + (self.N_x - 1) * (self.N_z - 1) * self.N_y + (
-        #                            self.N_y - 1) * (self.N_z - 1) * self.N_x
         self.N_tetrahedron = 5 * (self.N_x - 1) * (self.N_y - 1) * (self.N_z - 1)
         self.N_faces = 4 * (self.N_x - 1) * (self.N_y - 1) \
                        + 4 * (self.N_x - 1) * (self.N_z - 1) \
@@ -36,13 +25,9 @@ class Object:
         # physical quantities
         self.mass = 1
         self.gravity = 9.8
-        self.YoungsModulus = ti.field(ti.f32, ())
-        self.PoissonsRatio = ti.field(ti.f32, ())
-        self.LameMu = ti.field(ti.f32, ())
-        self.LameLa = ti.field(ti.f32, ())
         self.jacobi_iter = 50
         self.jacobi_alpha = 0.1
-        self.stiffness = 10000
+        self.stiffness = 5000
 
         # time-step size (for simulation, 16.7ms)
         self.h = 0.2
@@ -61,14 +46,7 @@ class Object:
         self.v = ti.Vector.field(3, ti.f32, self.N)
         self.elements_Dm_inv = ti.Matrix.field(3, 3, ti.f32, 5)
         self.elements_Dm = ti.Matrix.field(3, 3, ti.f32, 5)
-        # self.elements_V0 = ti.field(ti.f32, 5)
         self.f_ext = ti.Vector.field(3, ti.f32, self.N)
-
-        # derivatives
-        # self.dD = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(4, 3))
-        # self.dF = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(5, 4, 3))
-        # self.dP = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(self.N_tetrahedron, 4, 3))
-        # self.dH = ti.Matrix.field(3, 3, dtype=ti.f32, shape=(self.N_tetrahedron, 4, 3))
 
         # geometric components
         self.tetrahedrons = ti.Vector.field(4, ti.i32, self.N_tetrahedron)
@@ -83,7 +61,6 @@ class Object:
 
         self.meshing()
         self.initialize()
-        self.updateLameCoeff()
         self.initialize_elements()
 
     @ti.func
@@ -126,67 +103,58 @@ class Object:
             self.tetrahedrons[tid][2] = self.ijk_2_index(i + 1, j + 1, k + 1)
             self.tetrahedrons[tid][3] = self.ijk_2_index(i, j + 1, k)
 
-        # init faces
-        fid = 0
-        for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
-            self.faces[fid + 0] = self.ijk_2_index(i, j, 0)
-            self.faces[fid + 1] = self.ijk_2_index(i + 1, j, 0)
-            self.faces[fid + 2] = self.ijk_2_index(i + 1, j + 1, 0)
-            self.faces[fid + 3] = self.ijk_2_index(i, j, 0)
-            self.faces[fid + 4] = self.ijk_2_index(i + 1, j + 1, 0)
-            self.faces[fid + 5] = self.ijk_2_index(i, j + 1, 0)
+            # init faces
+            fid = 0
+            for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
+                self.faces[fid + 0] = self.ijk_2_index(i, j, 0)
+                self.faces[fid + 1] = self.ijk_2_index(i + 1, j, 0)
+                self.faces[fid + 2] = self.ijk_2_index(i + 1, j + 1, 0)
+                self.faces[fid + 3] = self.ijk_2_index(i, j, 0)
+                self.faces[fid + 4] = self.ijk_2_index(i + 1, j + 1, 0)
+                self.faces[fid + 5] = self.ijk_2_index(i, j + 1, 0)
 
-            self.faces[fid + 6] = self.ijk_2_index(i, j, self.N_z - 1)
-            self.faces[fid + 7] = self.ijk_2_index(i + 1, j, self.N_z - 1)
-            self.faces[fid + 8] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
-            self.faces[fid + 9] = self.ijk_2_index(i, j, self.N_z - 1)
-            self.faces[fid + 10] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
-            self.faces[fid + 11] = self.ijk_2_index(i, j + 1, self.N_z - 1)
-            fid += 12
+                self.faces[fid + 6] = self.ijk_2_index(i, j, self.N_z - 1)
+                self.faces[fid + 7] = self.ijk_2_index(i + 1, j, self.N_z - 1)
+                self.faces[fid + 8] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
+                self.faces[fid + 9] = self.ijk_2_index(i, j, self.N_z - 1)
+                self.faces[fid + 10] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
+                self.faces[fid + 11] = self.ijk_2_index(i, j + 1, self.N_z - 1)
+                fid += 12
 
-        for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
-            self.faces[fid + 0] = self.ijk_2_index(i, 0, k)
-            self.faces[fid + 1] = self.ijk_2_index(i + 1, 0, k)
-            self.faces[fid + 2] = self.ijk_2_index(i, 0, k + 1)
-            self.faces[fid + 3] = self.ijk_2_index(i, 0, k + 1)
-            self.faces[fid + 4] = self.ijk_2_index(i + 1, 0, k)
-            self.faces[fid + 5] = self.ijk_2_index(i + 1, 0, k + 1)
+            for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
+                self.faces[fid + 0] = self.ijk_2_index(i, 0, k)
+                self.faces[fid + 1] = self.ijk_2_index(i + 1, 0, k)
+                self.faces[fid + 2] = self.ijk_2_index(i, 0, k + 1)
+                self.faces[fid + 3] = self.ijk_2_index(i, 0, k + 1)
+                self.faces[fid + 4] = self.ijk_2_index(i + 1, 0, k)
+                self.faces[fid + 5] = self.ijk_2_index(i + 1, 0, k + 1)
 
-            self.faces[fid + 6] = self.ijk_2_index(i, self.N_y - 1, k)
-            self.faces[fid + 7] = self.ijk_2_index(i + 1, self.N_y - 1, k)
-            self.faces[fid + 8] = self.ijk_2_index(i, self.N_y - 1, k + 1)
-            self.faces[fid + 9] = self.ijk_2_index(i, self.N_y - 1, k + 1)
-            self.faces[fid + 10] = self.ijk_2_index(i + 1, self.N_y - 1, k)
-            self.faces[fid + 11] = self.ijk_2_index(i + 1, self.N_y - 1, k + 1)
-            fid += 12
+                self.faces[fid + 6] = self.ijk_2_index(i, self.N_y - 1, k)
+                self.faces[fid + 7] = self.ijk_2_index(i + 1, self.N_y - 1, k)
+                self.faces[fid + 8] = self.ijk_2_index(i, self.N_y - 1, k + 1)
+                self.faces[fid + 9] = self.ijk_2_index(i, self.N_y - 1, k + 1)
+                self.faces[fid + 10] = self.ijk_2_index(i + 1, self.N_y - 1, k)
+                self.faces[fid + 11] = self.ijk_2_index(i + 1, self.N_y - 1, k + 1)
+                fid += 12
 
-        for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
-            self.faces[fid + 0] = self.ijk_2_index(0, j, k)
-            self.faces[fid + 1] = self.ijk_2_index(0, j, k + 1)
-            self.faces[fid + 2] = self.ijk_2_index(0, j + 1, k)
-            self.faces[fid + 3] = self.ijk_2_index(0, j + 1, k)
-            self.faces[fid + 4] = self.ijk_2_index(0, j, k + 1)
-            self.faces[fid + 5] = self.ijk_2_index(0, j + 1, k + 1)
+            for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
+                self.faces[fid + 0] = self.ijk_2_index(0, j, k)
+                self.faces[fid + 1] = self.ijk_2_index(0, j, k + 1)
+                self.faces[fid + 2] = self.ijk_2_index(0, j + 1, k)
+                self.faces[fid + 3] = self.ijk_2_index(0, j + 1, k)
+                self.faces[fid + 4] = self.ijk_2_index(0, j, k + 1)
+                self.faces[fid + 5] = self.ijk_2_index(0, j + 1, k + 1)
 
-            self.faces[fid + 6] = self.ijk_2_index(self.N_x - 1, j, k)
-            self.faces[fid + 7] = self.ijk_2_index(self.N_x - 1, j, k + 1)
-            self.faces[fid + 8] = self.ijk_2_index(self.N_x - 1, j + 1, k)
-            self.faces[fid + 9] = self.ijk_2_index(self.N_x - 1, j + 1, k)
-            self.faces[fid + 10] = self.ijk_2_index(self.N_x - 1, j, k + 1)
-            self.faces[fid + 11] = self.ijk_2_index(self.N_x - 1, j + 1, k + 1)
-            fid += 12
-
-    @ti.kernel
-    def updateLameCoeff(self):
-        E = self.YoungsModulus[None]
-        nu = self.PoissonsRatio[None]
-        self.LameLa[None] = E * nu / ((1 + nu) * (1 - 2 * nu))
-        self.LameMu[None] = E / (2 * (1 + nu))
+                self.faces[fid + 6] = self.ijk_2_index(self.N_x - 1, j, k)
+                self.faces[fid + 7] = self.ijk_2_index(self.N_x - 1, j, k + 1)
+                self.faces[fid + 8] = self.ijk_2_index(self.N_x - 1, j + 1, k)
+                self.faces[fid + 9] = self.ijk_2_index(self.N_x - 1, j + 1, k)
+                self.faces[fid + 10] = self.ijk_2_index(self.N_x - 1, j, k + 1)
+                self.faces[fid + 11] = self.ijk_2_index(self.N_x - 1, j + 1, k + 1)
+                fid += 12
 
     @ti.kernel
     def initialize(self):
-        self.YoungsModulus[None] = 1e4
-        self.PoissonsRatio[None] = 0
         # init position and velocity
         for i, j, k in ti.ndrange(self.N_x, self.N_y, self.N_z):
             index = self.ijk_2_index(i, j, k)
@@ -201,24 +169,6 @@ class Object:
             Dm = self.compute_D(i)
             self.elements_Dm[i] = Dm
             self.elements_Dm_inv[i] = Dm.inverse()
-            # self.elements_V0[i] = ti.abs(Dm.determinant()) / 6
-        # # initialize dD
-        # for i, j in ti.ndrange(4, 3):
-        #     for n in ti.static(range(3)):
-        #         for m in ti.static(range(3)):
-        #             self.dD[i, j][n, m] = 0
-        #
-        # for i in ti.static(range(3)):
-        #     for j in ti.static(range(3)):
-        #         self.dD[i, j][j, i] = 1
-        #
-        # for dim in ti.static(range(3)):
-        #     self.dD[3, dim] = -(self.dD[0, dim] + self.dD[1, dim] + self.dD[2, dim])
-        # # initialize dF
-        # for k in ti.static(range(5)):
-        #     for i in ti.static(range(4)):
-        #         for j in ti.static(range(3)):
-        #             self.dF[k, i, j] = self.dD[i, j] @ self.elements_Dm_inv[k]
 
     def initialize_M(self):
         data = np.ones(3*self.N)
@@ -344,9 +294,8 @@ canvas = window.get_canvas()
 scene = ti.ui.Scene()
 camera = ti.ui.make_camera()
 canvas.set_background_color((0.2, 0.2, 0.3))
+wait = input("PRESS ENTER TO CONTINUE.")
 while window.running:
-    # for frame in range(30):
-    #     cube.update()
     cube.update()
 
     camera.position(0.5, 0.5, 2)
