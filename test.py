@@ -4,17 +4,14 @@ from scipy.sparse import dia_matrix, linalg
 
 ti.init(arch=ti.gpu)
 
-one = np.ones(5)
-
-
-@ti.kernel
-def add(result: ti.types.ndarray(), param: int):
-    for i in range(5):
-        result[i] += param
-
-
-add(one, 3)
-print(one)
+# @ti.kernel
+# def add(result: ti.types.ndarray(), param: int):
+#     for i in range(5):
+#         result[i] += param
+#
+#
+# add(one, 3)
+# print(one)
 
 # A = np.array([[ 3. ,  2. , -1. ],
 #               [ 2. , -2. ,  4. ],
@@ -34,16 +31,16 @@ print(one)
 # print(center)
 # center.copy_from(a)
 # print(center)
-# n = 10
-# ex = np.ones(n)
-# data = np.array([ex, 2 * ex, ex])
-# offsets_a = np.array([-1, 0, 1])
-# A = dia_matrix((data, offsets_a), shape=(n, n))
-# print(A.toarray())
-# offsets_i = np.array([0])
-# I = dia_matrix((ex, offsets_i), shape=(n, n))
-# B = A @ ex
-# print(B)
+n = 10
+ex = np.ones(n)
+data = np.array([ex, 2 * ex, ex])
+offsets_a = np.array([-1, 0, 1])
+A = dia_matrix((data, offsets_a), shape=(n, n))
+print(A.toarray())
+offsets_i = np.array([0])
+I = dia_matrix((ex, offsets_i), shape=(n, n))
+B = (3 * A) @ ex
+print(B)
 
 # K = ti.Vector.field(3, ti.f32, 2)
 # print(K[0][0])
