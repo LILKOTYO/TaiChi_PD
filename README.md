@@ -1,2 +1,11 @@
 # TaiChi_PD
-try a PD soft body simulation
+
+Algorithms that have been implemented：
+
+- Explicit FEM
+
+- Implicit FEM
+
+- Projective Dynamics
+
+- DiffPD (ing....)
