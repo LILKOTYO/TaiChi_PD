@@ -1,24 +1,49 @@
 import taichi as ti
 import numpy as np
-from scipy.sparse import dia_matrix
+from scipy.sparse import dia_matrix, linalg
 
 ti.init(arch=ti.gpu)
 
-center = ti.Vector([0.0, 0.0, 0.0])
-a = ti.Vector([0.0, 3.0, 0.0])
-print(center)
-center.copy_from(a)
-print(center)
+one = np.ones(5)
+
+
+@ti.kernel
+def add(result: ti.types.ndarray(), param: int):
+    for i in range(5):
+        result[i] += param
+
+
+add(one, 3)
+print(one)
+
+# A = np.array([[ 3. ,  2. , -1. ],
+#               [ 2. , -2. ,  4. ],
+#               [-1. ,  0.5, -1. ]])
+# solve = linalg.factorized(A) # Makes LU decomposition.
+# rhs1 = np.array([1, -2, 0])
+# x = solve(rhs1) # Uses the LU factors.
+# print(x)
+# a = ti.Matrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
+# print(a)
+# b = a.to_numpy().reshape(9)
+# print(b)
+# print(a)
+
+# center = ti.Vector([0.0, 0.0, 0.0])
+# a = ti.Vector([0.0, 3.0, 0.0])
+# print(center)
+# center.copy_from(a)
+# print(center)
 # n = 10
 # ex = np.ones(n)
 # data = np.array([ex, 2 * ex, ex])
 # offsets_a = np.array([-1, 0, 1])
 # A = dia_matrix((data, offsets_a), shape=(n, n))
+# print(A.toarray())
 # offsets_i = np.array([0])
 # I = dia_matrix((ex, offsets_i), shape=(n, n))
-# print(I.toarray())
-# B = A @ I
-# print(B.toarray())
+# B = A @ ex
+# print(B)
 
 # K = ti.Vector.field(3, ti.f32, 2)
 # print(K[0][0])

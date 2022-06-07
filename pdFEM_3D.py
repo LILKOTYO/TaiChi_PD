@@ -41,6 +41,7 @@ class Object:
         self.LameLa = ti.field(ti.f32, ())
         self.jacobi_iter = 50
         self.jacobi_alpha = 0.1
+        self.stiffness = 20
 
         # time-step size (for simulation, 16.7ms)
         self.h = 0.2
@@ -290,6 +291,13 @@ class Object:
         for i in range(self.N):
             self.x_proj[i] = (self.x_iter[i] + self.jacobi_alpha * self.x_proj[i]) / (self.count[i] + self.jacobi_alpha)
 
+    @ti.func
+    def updatePosVel(self, x_star: ti.types.ndarray()):
+        for i in range(self.N):
+            x_new = ti.Vector([x_star[3*i+0], x_star[3*i+1], x_star[3*i+2]])
+            self.v[i] = self.dh_inv * (x_new - self.x[i])
+            self.x[i] = x_new
+
     @ti.kernel
     def local_step(self):
         self.initialize_iter_vector()
@@ -300,7 +308,46 @@ class Object:
 
     @ti.kernel
     def global_step(self):
+        dim = 3 * self.N
+        dh2_inv = self.dh_inv**2
+        dh = self.dh
 
+        data = np.ones(3*self.N)
+        offset = np.array([0])
+        I = dia_matrix((data, offset), shape=(3*self.N, 3*self.N))
+        A = dh2_inv * self.M + self.stiffness * I
+        xn = self.x.to_numpy().reshape(dim)
+        vn = self.v.to_numpy().reshape(dim)
+        f_ext = self.f_ext.to_numpy().reshape(dim)
+        sn = xn + dh * vn + (self.dh**2) * linalg.inv(self.M) @ f_ext
+        p = self.x_proj.to_numpy().reshape(dim)
+        b = dh2_inv * self.M @ sn + self.stiffness * p
+        x_star = linalg.cg(A, b, x0=xn)
+
+        self.updatePosVel(x_star)
 
     def update(self):
         self.local_step()
+        self.global_step()
+
+
+cube = Object()
+
+window = ti.ui.Window("FEM Simulation", (800, 800), vsync=True)
+canvas = window.get_canvas()
+scene = ti.ui.Scene()
+camera = ti.ui.make_camera()
+canvas.set_background_color((0.2, 0.2, 0.3))
+while window.running:
+    for frame in range(30):
+        cube.update()
+
+    camera.position(0.5, 0.5, 2)
+    camera.lookat(0.5, 0.5, 0)
+    scene.set_camera(camera)
+
+    scene.point_light(pos=(0.5, 1, 2), color=(1, 1, 1))
+    scene.particles(cube.x, radius=0.002, color=(0.8, 0.8, 0.8))
+    scene.mesh(cube.x, cube.faces, color=(0.5, 0.5, 0.5))
+    canvas.scene(scene)
+    window.show()
