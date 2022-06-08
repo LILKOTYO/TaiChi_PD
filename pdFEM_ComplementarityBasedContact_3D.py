@@ -70,11 +70,14 @@ class Object:
         # precompute
         self.A = (self.dh_inv**2) * self.M + self.stiffness * self.sum_GcTGc
         self.A = csc_matrix(self.A)
-
-
+        self.AinvIic = self.precompute()
+        # np.set_printoptions(threshold=np.inf)
 
     @ti.func
     def ijk_2_index(self, i, j, k):
+        return k * self.N_x * self.N_y + j * self.N_x + i
+
+    def ijk_2_index_py(self, i, j, k):
         return k * self.N_x * self.N_y + j * self.N_x + i
 
     # -----------------------meshing and init----------------------------
@@ -177,21 +180,21 @@ class Object:
         sid = 0
         for i in range(self.N_x):
             for j in range(self.N_y):
-                self.surface_nodes[sid] = self.ijk_2_index(i, j, 0)
+                self.surface_nodes[sid] = self.ijk_2_index_py(i, j, 0)
                 sid += 1
-                self.surface_nodes[sid] = self.ijk_2_index(i, j, self.N_z-1)
+                self.surface_nodes[sid] = self.ijk_2_index_py(i, j, self.N_z-1)
                 sid += 1
         for i in range(self.N_x):
-            for k in range(self.N_z-2):
-                self.surface_nodes[sid] = self.ijk_2_index(i, 0, k)
+            for k in range(1, self.N_z-1):
+                self.surface_nodes[sid] = self.ijk_2_index_py(i, 0, k)
                 sid += 1
-                self.surface_nodes[sid] = self.ijk_2_index(i, self.N_y-1, k)
+                self.surface_nodes[sid] = self.ijk_2_index_py(i, self.N_y-1, k)
                 sid += 1
-        for j in range(self.N_y-2):
-            for k in range(self.N_z-2):
-                self.surface_nodes[sid] = self.ijk_2_index(0, j, k)
+        for j in range(1, self.N_y-1):
+            for k in range(1, self.N_z-1):
+                self.surface_nodes[sid] = self.ijk_2_index_py(0, j, k)
                 sid += 1
-                self.surface_nodes[sid] = self.ijk_2_index(self.N_x-1, j, k)
+                self.surface_nodes[sid] = self.ijk_2_index_py(self.N_x-1, j, k)
                 sid += 1
 
     @ti.kernel
@@ -226,6 +229,18 @@ class Object:
             GcT.append(GcT_i)
             sum_GcTGc = sum_GcTGc + GcTGc_i
         return GcT, sum_GcTGc
+
+    def precompute(self):
+        data = np.ones(self.N_surfaces*3)
+        col = np.arange(self.N_surfaces*3)
+        row = []
+        for i in range(self.N_surfaces):
+            ind = self.surface_nodes[i]
+            row.append(3 * ind + 0)
+            row.append(3 * ind + 1)
+            row.append(3 * ind + 2)
+        row_nd = np.array(row)
+        return csc_matrix((data, (row_nd, col)), shape=(3*self.N, 3*self.N_surfaces))
 
     @ti.func
     def compute_D(self, i):
@@ -331,7 +346,7 @@ class Object:
         b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ p
         # b = dh2_inv * self.M @ sn + self.stiffness * p
         # b = csc_matrix((b, (np.arange(dim), np.zeros(dim))), shape=(dim, 1))
-        x_star, info = linalg.cg(A, b, x0=xn)
+        x_star, info = linalg.cg(self.A, b, x0=xn)
 
         return x_star
 

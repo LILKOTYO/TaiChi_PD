@@ -81,8 +81,6 @@ class Object:
         x = ti.field(ti.f32, shape=3 * self.N)
 
         self.meshing()
-        print(self.faces)
-        exit()
         self.initialize()
         self.updateLameCoeff()
         self.initialize_elements()
