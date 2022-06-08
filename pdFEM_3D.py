@@ -64,6 +64,10 @@ class Object:
         self.GcT, self.sum_GcTGc = self.initialize_Gc()
         self.initialize_elements()
 
+        # precompute
+        self.A = (self.dh_inv**2) * self.M + self.stiffness * self.sum_GcTGc
+        self.A = csc_matrix(self.A)
+
     @ti.func
     def ijk_2_index(self, i, j, k):
         return k * self.N_x * self.N_y + j * self.N_x + i
@@ -104,6 +108,7 @@ class Object:
             self.tetrahedrons[tid][2] = self.ijk_2_index(i + 1, j + 1, k + 1)
             self.tetrahedrons[tid][3] = self.ijk_2_index(i, j + 1, k)
 
+        for i in range(1):
             # init faces
             fid = 0
             for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
@@ -291,18 +296,13 @@ class Object:
         dh2_inv = self.dh_inv**2
         dh = self.dh
 
-        # A = dh2_inv * self.M + self.stiffness * self.I
-        A = dh2_inv * self.M + self.stiffness * self.sum_GcTGc
-        A = csc_matrix(A)
         xn = self.x.to_numpy().reshape(dim)
         vn = self.v.to_numpy().reshape(dim)
         f_ext = self.f_ext.to_numpy().reshape(dim)
         sn = xn + dh * vn + (dh**2) * linalg.inv(self.M) @ f_ext
         p = self.x_proj.to_numpy().reshape(dim)
         b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ p
-        # b = dh2_inv * self.M @ sn + self.stiffness * p
-        # b = csc_matrix((b, (np.arange(dim), np.zeros(dim))), shape=(dim, 1))
-        x_star, info = linalg.cg(A, b, x0=xn)
+        x_star, info = linalg.cg(self.A, b, x0=xn)
 
         return x_star
 

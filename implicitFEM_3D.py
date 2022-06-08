@@ -81,6 +81,8 @@ class Object:
         x = ti.field(ti.f32, shape=3 * self.N)
 
         self.meshing()
+        print(self.faces)
+        exit()
         self.initialize()
         self.updateLameCoeff()
         self.initialize_elements()
@@ -127,7 +129,7 @@ class Object:
 
         # init faces
         fid = 0
-        for i, j in ti.ndrange(self.N_x-1, self.N_y-1):
+        for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
             self.faces[fid + 0] = self.ijk_2_index(i, j, 0)
             self.faces[fid + 1] = self.ijk_2_index(i + 1, j, 0)
             self.faces[fid + 2] = self.ijk_2_index(i + 1, j + 1, 0)
@@ -143,7 +145,7 @@ class Object:
             self.faces[fid + 11] = self.ijk_2_index(i, j + 1, self.N_z - 1)
             fid += 12
 
-        for i, k in ti.ndrange(self.N_x-1, self.N_z-1):
+        for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
             self.faces[fid + 0] = self.ijk_2_index(i, 0, k)
             self.faces[fid + 1] = self.ijk_2_index(i + 1, 0, k)
             self.faces[fid + 2] = self.ijk_2_index(i, 0, k + 1)
@@ -159,7 +161,7 @@ class Object:
             self.faces[fid + 11] = self.ijk_2_index(i + 1, self.N_y - 1, k + 1)
             fid += 12
 
-        for j, k in ti.ndrange(self.N_y-1, self.N_z-1):
+        for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
             self.faces[fid + 0] = self.ijk_2_index(0, j, k)
             self.faces[fid + 1] = self.ijk_2_index(0, j, k + 1)
             self.faces[fid + 2] = self.ijk_2_index(0, j + 1, k)

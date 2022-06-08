@@ -20,6 +20,7 @@ class Object:
         self.N_faces = 4 * (self.N_x - 1) * (self.N_y - 1) \
                        + 4 * (self.N_x - 1) * (self.N_z - 1) \
                        + 4 * (self.N_y - 1) * (self.N_z - 1)
+        self.N_surfaces = self.N_x * self.N_y * 2 + (self.N_z - 2) * self.N_x * 2 + (self.N_z - 2) * (self.N_y - 2) * 2
         self.dx = 0.5 / self.N_x
 
         # physical quantities
@@ -58,11 +59,15 @@ class Object:
         data = np.ones(3 * self.N)
         offset = np.array([0])
         self.I = dia_matrix((data, offset), shape=(3 * self.N, 3 * self.N))
+        self.surface_nodes = ti.field(ti.i32, self.N_surfaces)
 
         self.meshing()
         self.initialize()
         self.GcT, self.sum_GcTGc = self.initialize_Gc()
         self.initialize_elements()
+        self.initialize_surface()
+
+
 
     @ti.func
     def ijk_2_index(self, i, j, k):
@@ -163,6 +168,27 @@ class Object:
             self.x_proj[index] = ti.Vector([0.0, 0.0, 0.0])
             self.v[index] = ti.Vector([0.0, 0.0, 0.0])
             self.f_ext[index] = ti.Vector([0.0, -self.gravity * self.mass, 0.0])
+
+    def initialize_surface(self):
+        sid = 0
+        for i in range(self.N_x):
+            for j in range(self.N_y):
+                self.surface_nodes[sid] = self.ijk_2_index(i, j, 0)
+                sid += 1
+                self.surface_nodes[sid] = self.ijk_2_index(i, j, self.N_z-1)
+                sid += 1
+        for i in range(self.N_x):
+            for k in range(self.N_z-2):
+                self.surface_nodes[sid] = self.ijk_2_index(i, 0, k)
+                sid += 1
+                self.surface_nodes[sid] = self.ijk_2_index(i, self.N_y-1, k)
+                sid += 1
+        for j in range(self.N_y-2):
+            for k in range(self.N_z-2):
+                self.surface_nodes[sid] = self.ijk_2_index(0, j, k)
+                sid += 1
+                self.surface_nodes[sid] = self.ijk_2_index(self.N_x-1, j, k)
+                sid += 1
 
     @ti.kernel
     def initialize_elements(self):
