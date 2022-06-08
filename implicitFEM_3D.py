@@ -127,55 +127,56 @@ class Object:
             self.tetrahedrons[tid][2] = self.ijk_2_index(i + 1, j + 1, k + 1)
             self.tetrahedrons[tid][3] = self.ijk_2_index(i, j + 1, k)
 
-        # init faces
-        fid = 0
-        for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
-            self.faces[fid + 0] = self.ijk_2_index(i, j, 0)
-            self.faces[fid + 1] = self.ijk_2_index(i + 1, j, 0)
-            self.faces[fid + 2] = self.ijk_2_index(i + 1, j + 1, 0)
-            self.faces[fid + 3] = self.ijk_2_index(i, j, 0)
-            self.faces[fid + 4] = self.ijk_2_index(i + 1, j + 1, 0)
-            self.faces[fid + 5] = self.ijk_2_index(i, j + 1, 0)
+        for i in range(1):
+            # init faces
+            fid = 0
+            for i, j in ti.ndrange(self.N_x - 1, self.N_y - 1):
+                self.faces[fid + 0] = self.ijk_2_index(i, j, 0)
+                self.faces[fid + 1] = self.ijk_2_index(i + 1, j, 0)
+                self.faces[fid + 2] = self.ijk_2_index(i + 1, j + 1, 0)
+                self.faces[fid + 3] = self.ijk_2_index(i, j, 0)
+                self.faces[fid + 4] = self.ijk_2_index(i + 1, j + 1, 0)
+                self.faces[fid + 5] = self.ijk_2_index(i, j + 1, 0)
 
-            self.faces[fid + 6] = self.ijk_2_index(i, j, self.N_z - 1)
-            self.faces[fid + 7] = self.ijk_2_index(i + 1, j, self.N_z - 1)
-            self.faces[fid + 8] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
-            self.faces[fid + 9] = self.ijk_2_index(i, j, self.N_z - 1)
-            self.faces[fid + 10] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
-            self.faces[fid + 11] = self.ijk_2_index(i, j + 1, self.N_z - 1)
-            fid += 12
+                self.faces[fid + 6] = self.ijk_2_index(i, j, self.N_z - 1)
+                self.faces[fid + 7] = self.ijk_2_index(i + 1, j, self.N_z - 1)
+                self.faces[fid + 8] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
+                self.faces[fid + 9] = self.ijk_2_index(i, j, self.N_z - 1)
+                self.faces[fid + 10] = self.ijk_2_index(i + 1, j + 1, self.N_z - 1)
+                self.faces[fid + 11] = self.ijk_2_index(i, j + 1, self.N_z - 1)
+                fid += 12
 
-        for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
-            self.faces[fid + 0] = self.ijk_2_index(i, 0, k)
-            self.faces[fid + 1] = self.ijk_2_index(i + 1, 0, k)
-            self.faces[fid + 2] = self.ijk_2_index(i, 0, k + 1)
-            self.faces[fid + 3] = self.ijk_2_index(i, 0, k + 1)
-            self.faces[fid + 4] = self.ijk_2_index(i + 1, 0, k)
-            self.faces[fid + 5] = self.ijk_2_index(i + 1, 0, k + 1)
+            for i, k in ti.ndrange(self.N_x - 1, self.N_z - 1):
+                self.faces[fid + 0] = self.ijk_2_index(i, 0, k)
+                self.faces[fid + 1] = self.ijk_2_index(i + 1, 0, k)
+                self.faces[fid + 2] = self.ijk_2_index(i, 0, k + 1)
+                self.faces[fid + 3] = self.ijk_2_index(i, 0, k + 1)
+                self.faces[fid + 4] = self.ijk_2_index(i + 1, 0, k)
+                self.faces[fid + 5] = self.ijk_2_index(i + 1, 0, k + 1)
 
-            self.faces[fid + 6] = self.ijk_2_index(i, self.N_y - 1, k)
-            self.faces[fid + 7] = self.ijk_2_index(i + 1, self.N_y - 1, k)
-            self.faces[fid + 8] = self.ijk_2_index(i, self.N_y - 1, k + 1)
-            self.faces[fid + 9] = self.ijk_2_index(i, self.N_y - 1, k + 1)
-            self.faces[fid + 10] = self.ijk_2_index(i + 1, self.N_y - 1, k)
-            self.faces[fid + 11] = self.ijk_2_index(i + 1, self.N_y - 1, k + 1)
-            fid += 12
+                self.faces[fid + 6] = self.ijk_2_index(i, self.N_y - 1, k)
+                self.faces[fid + 7] = self.ijk_2_index(i + 1, self.N_y - 1, k)
+                self.faces[fid + 8] = self.ijk_2_index(i, self.N_y - 1, k + 1)
+                self.faces[fid + 9] = self.ijk_2_index(i, self.N_y - 1, k + 1)
+                self.faces[fid + 10] = self.ijk_2_index(i + 1, self.N_y - 1, k)
+                self.faces[fid + 11] = self.ijk_2_index(i + 1, self.N_y - 1, k + 1)
+                fid += 12
 
-        for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
-            self.faces[fid + 0] = self.ijk_2_index(0, j, k)
-            self.faces[fid + 1] = self.ijk_2_index(0, j, k + 1)
-            self.faces[fid + 2] = self.ijk_2_index(0, j + 1, k)
-            self.faces[fid + 3] = self.ijk_2_index(0, j + 1, k)
-            self.faces[fid + 4] = self.ijk_2_index(0, j, k + 1)
-            self.faces[fid + 5] = self.ijk_2_index(0, j + 1, k + 1)
+            for j, k in ti.ndrange(self.N_y - 1, self.N_z - 1):
+                self.faces[fid + 0] = self.ijk_2_index(0, j, k)
+                self.faces[fid + 1] = self.ijk_2_index(0, j, k + 1)
+                self.faces[fid + 2] = self.ijk_2_index(0, j + 1, k)
+                self.faces[fid + 3] = self.ijk_2_index(0, j + 1, k)
+                self.faces[fid + 4] = self.ijk_2_index(0, j, k + 1)
+                self.faces[fid + 5] = self.ijk_2_index(0, j + 1, k + 1)
 
-            self.faces[fid + 6] = self.ijk_2_index(self.N_x - 1, j, k)
-            self.faces[fid + 7] = self.ijk_2_index(self.N_x - 1, j, k + 1)
-            self.faces[fid + 8] = self.ijk_2_index(self.N_x - 1, j + 1, k)
-            self.faces[fid + 9] = self.ijk_2_index(self.N_x - 1, j + 1, k)
-            self.faces[fid + 10] = self.ijk_2_index(self.N_x - 1, j, k + 1)
-            self.faces[fid + 11] = self.ijk_2_index(self.N_x - 1, j + 1, k + 1)
-            fid += 12
+                self.faces[fid + 6] = self.ijk_2_index(self.N_x - 1, j, k)
+                self.faces[fid + 7] = self.ijk_2_index(self.N_x - 1, j, k + 1)
+                self.faces[fid + 8] = self.ijk_2_index(self.N_x - 1, j + 1, k)
+                self.faces[fid + 9] = self.ijk_2_index(self.N_x - 1, j + 1, k)
+                self.faces[fid + 10] = self.ijk_2_index(self.N_x - 1, j, k + 1)
+                self.faces[fid + 11] = self.ijk_2_index(self.N_x - 1, j + 1, k + 1)
+                fid += 12
 
     @ti.kernel
     def updateLameCoeff(self):

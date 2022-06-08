@@ -67,6 +67,10 @@ class Object:
         self.initialize_elements()
         self.initialize_surface()
 
+        # precompute
+        self.A = (self.dh_inv**2) * self.M + self.stiffness * self.sum_GcTGc
+        self.A = csc_matrix(self.A)
+
 
 
     @ti.func
@@ -318,8 +322,7 @@ class Object:
         dh = self.dh
 
         # A = dh2_inv * self.M + self.stiffness * self.I
-        A = dh2_inv * self.M + self.stiffness * self.sum_GcTGc
-        A = csc_matrix(A)
+
         xn = self.x.to_numpy().reshape(dim)
         vn = self.v.to_numpy().reshape(dim)
         f_ext = self.f_ext.to_numpy().reshape(dim)
