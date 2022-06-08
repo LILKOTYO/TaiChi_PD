@@ -336,16 +336,12 @@ class Object:
         dh2_inv = self.dh_inv**2
         dh = self.dh
 
-        # A = dh2_inv * self.M + self.stiffness * self.I
-
         xn = self.x.to_numpy().reshape(dim)
         vn = self.v.to_numpy().reshape(dim)
         f_ext = self.f_ext.to_numpy().reshape(dim)
         sn = xn + dh * vn + (dh**2) * linalg.inv(self.M) @ f_ext
         p = self.x_proj.to_numpy().reshape(dim)
         b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ p
-        # b = dh2_inv * self.M @ sn + self.stiffness * p
-        # b = csc_matrix((b, (np.arange(dim), np.zeros(dim))), shape=(dim, 1))
         x_star, info = linalg.cg(self.A, b, x0=xn)
 
         return x_star
