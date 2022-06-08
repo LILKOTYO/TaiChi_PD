@@ -61,6 +61,7 @@ class Object:
 
         self.meshing()
         self.initialize()
+        self.GcT, self.sum_GcTGc = self.initialize_Gc()
         self.initialize_elements()
 
     @ti.func
@@ -175,6 +176,27 @@ class Object:
         offset = np.array([0])
         return dia_matrix((data, offset), shape=(3*self.N, 3*self.N))
 
+    def initialize_Gc(self):
+        dim = 3 * self.N
+        data = np.ones(12)
+        GcT = []
+        sum_GcTGc = csc_matrix((dim, dim))
+        for i in range(self.N_tetrahedron):
+            row = np.arange(12)
+            col = []
+            for n in range(4):
+                ind = self.tetrahedrons[i][n]
+                col.append(3 * ind + 0)
+                col.append(3 * ind + 1)
+                col.append(3 * ind + 2)
+            col_nd = np.array(col)
+            Gc_i = csc_matrix((data, (row, col_nd)), shape=(12, dim))
+            GcT_i = Gc_i.transpose()
+            GcTGc_i = GcT_i @ Gc_i
+            GcT.append(GcT_i)
+            sum_GcTGc = sum_GcTGc + GcTGc_i
+        return GcT, sum_GcTGc
+
     @ti.func
     def compute_D(self, i):
         q = self.tetrahedrons[i][0]
@@ -269,14 +291,17 @@ class Object:
         dh2_inv = self.dh_inv**2
         dh = self.dh
 
-        A = dh2_inv * self.M + self.stiffness * self.I
+        # A = dh2_inv * self.M + self.stiffness * self.I
+        A = dh2_inv * self.M + self.stiffness * self.sum_GcTGc
         A = csc_matrix(A)
         xn = self.x.to_numpy().reshape(dim)
         vn = self.v.to_numpy().reshape(dim)
         f_ext = self.f_ext.to_numpy().reshape(dim)
-        sn = xn + dh * vn + (self.dh**2) * linalg.inv(self.M) @ f_ext
+        sn = xn + dh * vn + (dh**2) * linalg.inv(self.M) @ f_ext
         p = self.x_proj.to_numpy().reshape(dim)
-        b = dh2_inv * self.M @ sn + self.stiffness * p
+        b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ p
+        # b = dh2_inv * self.M @ sn + self.stiffness * p
+        # b = csc_matrix((b, (np.arange(dim), np.zeros(dim))), shape=(dim, 1))
         x_star, info = linalg.cg(A, b, x0=xn)
 
         return x_star

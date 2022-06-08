@@ -1,15 +1,31 @@
 import taichi as ti
 import numpy as np
-from scipy.sparse import dia_matrix, linalg
+from scipy.sparse import csr_matrix, linalg
 
 ti.init(arch=ti.gpu)
 
-A = ti.Matrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
-print(A)
-Iic = ti.Matrix([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
-print(Iic)
-B = A @ Iic
-print(B)
+a = np.array([0, 0, 0, 0])
+print(type(a))
+b = np.zeros(5)
+print(type(b))
+c = np.arange(12)
+print(type(c))
+data = np.ones(12)
+print(data)
+# A = csr_matrix((3, 4))
+# B = csr_matrix((3, 4))
+# B[0, 0] = 1
+# l = [A]
+# l.append(B)
+# print(len(l))
+# for i in range(len(l)):
+#     print(l[i].toarray())
+# A = ti.Matrix([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]])
+# print(A)
+# Iic = ti.Matrix([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
+# print(Iic)
+# B = A @ Iic
+# print(B)
 
 
 # @ti.kernel
