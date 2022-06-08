@@ -87,55 +87,56 @@ def meshing():
         tetrahedrons[tid][2] = ijk_2_index(i + 1, j + 1, k + 1)
         tetrahedrons[tid][3] = ijk_2_index(i, j + 1, k)
 
-        # init faces
-        fid = 0
-        for i, j in ti.ndrange(N_x - 1, N_y - 1):
-            faces[fid + 0] = ijk_2_index(i, j, 0)
-            faces[fid + 1] = ijk_2_index(i + 1, j, 0)
-            faces[fid + 2] = ijk_2_index(i + 1, j + 1, 0)
-            faces[fid + 3] = ijk_2_index(i, j, 0)
-            faces[fid + 4] = ijk_2_index(i + 1, j + 1, 0)
-            faces[fid + 5] = ijk_2_index(i, j + 1, 0)
+        for m in range(1):
+            # init faces
+            fid = 0
+            for i, j in ti.ndrange(N_x - 1, N_y - 1):
+                faces[fid + 0] = ijk_2_index(i, j, 0)
+                faces[fid + 1] = ijk_2_index(i + 1, j, 0)
+                faces[fid + 2] = ijk_2_index(i + 1, j + 1, 0)
+                faces[fid + 3] = ijk_2_index(i, j, 0)
+                faces[fid + 4] = ijk_2_index(i + 1, j + 1, 0)
+                faces[fid + 5] = ijk_2_index(i, j + 1, 0)
 
-            faces[fid + 6] = ijk_2_index(i, j, N_z - 1)
-            faces[fid + 7] = ijk_2_index(i + 1, j, N_z - 1)
-            faces[fid + 8] = ijk_2_index(i + 1, j + 1, N_z - 1)
-            faces[fid + 9] = ijk_2_index(i, j, N_z - 1)
-            faces[fid + 10] = ijk_2_index(i + 1, j + 1, N_z - 1)
-            faces[fid + 11] = ijk_2_index(i, j + 1, N_z - 1)
-            fid += 12
+                faces[fid + 6] = ijk_2_index(i, j, N_z - 1)
+                faces[fid + 7] = ijk_2_index(i + 1, j, N_z - 1)
+                faces[fid + 8] = ijk_2_index(i + 1, j + 1, N_z - 1)
+                faces[fid + 9] = ijk_2_index(i, j, N_z - 1)
+                faces[fid + 10] = ijk_2_index(i + 1, j + 1, N_z - 1)
+                faces[fid + 11] = ijk_2_index(i, j + 1, N_z - 1)
+                fid += 12
 
-        for i, k in ti.ndrange(N_x - 1, N_z - 1):
-            faces[fid + 0] = ijk_2_index(i, 0, k)
-            faces[fid + 1] = ijk_2_index(i + 1, 0, k)
-            faces[fid + 2] = ijk_2_index(i, 0, k + 1)
-            faces[fid + 3] = ijk_2_index(i, 0, k + 1)
-            faces[fid + 4] = ijk_2_index(i + 1, 0, k)
-            faces[fid + 5] = ijk_2_index(i + 1, 0, k + 1)
+            for i, k in ti.ndrange(N_x - 1, N_z - 1):
+                faces[fid + 0] = ijk_2_index(i, 0, k)
+                faces[fid + 1] = ijk_2_index(i + 1, 0, k)
+                faces[fid + 2] = ijk_2_index(i, 0, k + 1)
+                faces[fid + 3] = ijk_2_index(i, 0, k + 1)
+                faces[fid + 4] = ijk_2_index(i + 1, 0, k)
+                faces[fid + 5] = ijk_2_index(i + 1, 0, k + 1)
 
-            faces[fid + 6] = ijk_2_index(i, N_y - 1, k)
-            faces[fid + 7] = ijk_2_index(i + 1, N_y - 1, k)
-            faces[fid + 8] = ijk_2_index(i, N_y - 1, k + 1)
-            faces[fid + 9] = ijk_2_index(i, N_y - 1, k + 1)
-            faces[fid + 10] = ijk_2_index(i + 1, N_y - 1, k)
-            faces[fid + 11] = ijk_2_index(i + 1, N_y - 1, k + 1)
-            fid += 12
+                faces[fid + 6] = ijk_2_index(i, N_y - 1, k)
+                faces[fid + 7] = ijk_2_index(i + 1, N_y - 1, k)
+                faces[fid + 8] = ijk_2_index(i, N_y - 1, k + 1)
+                faces[fid + 9] = ijk_2_index(i, N_y - 1, k + 1)
+                faces[fid + 10] = ijk_2_index(i + 1, N_y - 1, k)
+                faces[fid + 11] = ijk_2_index(i + 1, N_y - 1, k + 1)
+                fid += 12
 
-        for j, k in ti.ndrange(N_y - 1, N_z - 1):
-            faces[fid + 0] = ijk_2_index(0, j, k)
-            faces[fid + 1] = ijk_2_index(0, j, k + 1)
-            faces[fid + 2] = ijk_2_index(0, j + 1, k)
-            faces[fid + 3] = ijk_2_index(0, j + 1, k)
-            faces[fid + 4] = ijk_2_index(0, j, k + 1)
-            faces[fid + 5] = ijk_2_index(0, j + 1, k + 1)
+            for j, k in ti.ndrange(N_y - 1, N_z - 1):
+                faces[fid + 0] = ijk_2_index(0, j, k)
+                faces[fid + 1] = ijk_2_index(0, j, k + 1)
+                faces[fid + 2] = ijk_2_index(0, j + 1, k)
+                faces[fid + 3] = ijk_2_index(0, j + 1, k)
+                faces[fid + 4] = ijk_2_index(0, j, k + 1)
+                faces[fid + 5] = ijk_2_index(0, j + 1, k + 1)
 
-            faces[fid + 6] = ijk_2_index(N_x - 1, j, k)
-            faces[fid + 7] = ijk_2_index(N_x - 1, j, k + 1)
-            faces[fid + 8] = ijk_2_index(N_x - 1, j + 1, k)
-            faces[fid + 9] = ijk_2_index(N_x - 1, j + 1, k)
-            faces[fid + 10] = ijk_2_index(N_x - 1, j, k + 1)
-            faces[fid + 11] = ijk_2_index(N_x - 1, j + 1, k + 1)
-            fid += 12
+                faces[fid + 6] = ijk_2_index(N_x - 1, j, k)
+                faces[fid + 7] = ijk_2_index(N_x - 1, j, k + 1)
+                faces[fid + 8] = ijk_2_index(N_x - 1, j + 1, k)
+                faces[fid + 9] = ijk_2_index(N_x - 1, j + 1, k)
+                faces[fid + 10] = ijk_2_index(N_x - 1, j, k + 1)
+                faces[fid + 11] = ijk_2_index(N_x - 1, j + 1, k + 1)
+                fid += 12
 
 
 @ti.kernel
