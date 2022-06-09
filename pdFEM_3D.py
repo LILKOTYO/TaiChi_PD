@@ -11,7 +11,7 @@ class Object:
         # initialize settings
         self.init_x = 0.3
         self.init_y = 0.3
-        self.init_z = 0.3
+        self.init_z = -0.3
         self.N_x = 3
         self.N_y = 3
         self.N_z = 3
@@ -25,9 +25,9 @@ class Object:
         # physical quantities
         self.mass = 1
         self.gravity = 9.8
-        self.jacobi_iter = 50
+        self.jacobi_iter = 10
         self.jacobi_alpha = 0.1
-        self.stiffness = 5000
+        self.stiffness = 1000
 
         # time-step size (for simulation, 16.7ms)
         self.h = 0.2

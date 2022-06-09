@@ -26,9 +26,9 @@ class Object:
         # physical quantities
         self.mass = 1
         self.gravity = 9.8
-        self.jacobi_iter = 50
+        self.jacobi_iter = 10
         self.jacobi_alpha = 0.1
-        self.stiffness = 5000
+        self.stiffness = 1000
 
         # time-step size (for simulation, 16.7ms)
         self.h = 0.2
@@ -72,6 +72,9 @@ class Object:
         self.A = csc_matrix(self.A)
         self.AinvIic = self.precompute()
         # np.set_printoptions(threshold=np.inf)
+
+        # gripper
+        self.gripper_left_pos = ti.Vector([])
 
     @ti.func
     def ijk_2_index(self, i, j, k):
@@ -276,6 +279,10 @@ class Object:
         for i in range(self.N):
             self.x_iter[i] = ti.Vector([0.0, 0.0, 0.0])
             self.count[i] = 0
+
+    # @ti.kernel
+    # def contact_detect(self):
+
 
     @ti.func
     def jacobi(self):
