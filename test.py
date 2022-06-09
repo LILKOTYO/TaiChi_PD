@@ -1,17 +1,64 @@
 import taichi as ti
 import numpy as np
-from scipy.sparse import csr_matrix, linalg
+from scipy.sparse import csc_matrix, csr_matrix, linalg
+import math
 
-ti.init(arch=ti.gpu)
+A = csc_matrix((3, 4))
+A[0, 0] = 1
+A[0, 2] = 5
+A[2, 2] = 6
 
-a = np.array([0, 0, 0, 0])
-print(type(a))
-b = np.zeros(5)
-print(type(b))
-c = np.arange(12)
-print(type(c))
-data = np.ones(12)
-print(data)
+
+# ti.init(arch=ti.gpu)
+# a = np.array([-1 for i in range(10)])
+# print(a)
+#
+# @ti.kernel
+# def test(array: ti.types.ndarray()):
+#     for i in range(10):
+#         array[i] = 2
+#
+#
+# test(a)
+# print(a)
+
+
+# a = ti.field(ti.i32, 30)
+# b = np.arange(30)
+# a.from_numpy(b)
+# print(a)
+#
+# @ti.kernel
+# def test():
+#     ti.append(a, 0, 1)
+#
+#
+# test()
+# print(a)
+# A = csc_matrix((3, 4))
+# A[0, 0] = 1
+# A[0, 2] = 5
+# A[2, 2] = 6
+# # x = np.array([[0, 1], [2, 3], [4, 5], [6, 7]])
+# x = np.array([[0], [1], [2], [3]])
+# b = A @ x
+# print(type(b))
+# B = csc_matrix(b)
+# print(B.toarray())
+# print(B.get_shape())
+#
+# a1 = A.getcol(0).toarray()
+# a2 = A.getcol(2).toarray()
+# b = np.hstack((a1, a1, a2))
+# print(b)
+# a = np.array([0, 0, 0, 0])
+# print(type(a))
+# b = np.zeros(5)
+# print(type(b))
+# c = np.arange(12)
+# print(type(c))
+# data = np.ones(12)
+# print(data)
 # A = csr_matrix((3, 4))
 # B = csr_matrix((3, 4))
 # B[0, 0] = 1
@@ -26,7 +73,7 @@ print(data)
 # print(Iic)
 # B = A @ Iic
 # print(B)
-
+# print(type(B))
 
 # @ti.kernel
 # def add(result: ti.types.ndarray(), param: int):
