@@ -1,14 +1,21 @@
 import taichi as ti
 import numpy as np
-from scipy.sparse import csc_matrix, csr_matrix, linalg
+from scipy.sparse import csc_matrix, csr_matrix, linalg, lil_matrix
 import math
 
-A = csc_matrix((3, 4))
-A[0, 0] = 1
-A[0, 2] = 5
-A[2, 2] = 6
+A = lil_matrix((3, 4))
 
+def change(a: lil_matrix):
+    a[0, 0] = 1
+    a[0, 2] = 5
+    a[2, 2] = 6
 
+change(A)
+print(A.toarray())
+A[0, 2] = 1 - A[0, 2]
+print(type(A[0, 2]))
+print(A.toarray())
+print(type(A))
 # ti.init(arch=ti.gpu)
 # a = np.array([-1 for i in range(10)])
 # print(a)

@@ -1,5 +1,5 @@
 import taichi as ti
-from scipy.sparse import dia_matrix, csc_matrix, linalg
+from scipy.sparse import lil_matrix, dia_matrix, csc_matrix, linalg
 import numpy as np
 import math
 
@@ -408,12 +408,14 @@ class Object:
                 if c_ptr >= len(C)-1: break
         return csc_matrix(AinvIic_iter)
 
-    def assemble_B2(self, C: ti.types.ndarray()):
+    def assemble_B2(self, C: ti.types.ndarray(), B1: lil_matrix):
         # assemble Acc
         first = True
-        Acc = np.arange(1)
+        last = 0
+        Acc_np = np.arange(1)
         for i in range(self.N_surfaces):
             if C[i] == -1:
+                last = i
                 continue
             else:
                 # assemble col
@@ -423,9 +425,37 @@ class Object:
                 a3 = self.A.getcol(3 * ind + 2).toarray()
                 if first:
                     first = False
-                    Acc = np.hstack((a1, a2, a3))
+                    Acc_np = np.hstack((a1, a2, a3))
                 else:
-                    Acc = np.hstack((Acc, a1, a2, a3))
+                    Acc_np = np.hstack((Acc_np, a1, a2, a3))
+        Acc = lil_matrix(Acc_np)
+        last += 1
+        first = True
+        for i in range(last, self.N_surfaces):
+            ind = C[i]
+            b1 = Acc.getrow(3 * ind + 0).toarray()
+            b2 = Acc.getrow(3 * ind + 1).toarray()
+            b3 = Acc.getrow(3 * ind + 2).toarray()
+            if first:
+                first = False
+                Acc_np = np.hstack((b1, b2, b3))
+            else:
+                Acc_np = np.hstack((Acc_np, b1, b2, b3))
+        Acc = lil_matrix(Acc_np)
+        B2 = -B1 @ Acc
+        col_id = 0
+        for i in range(last, self.N_surfaces):
+            ind = C[i]
+            B2[3 * i + 0, col_id] = 1.0 - B2[3 * i + 0, col_id]
+            col_id += 1
+            B2[3 * i + 1, col_id] = 1.0 - B2[3 * i + 1, col_id]
+            col_id += 1
+            B2[3 * i + 2, col_id] = 1.0 - B2[3 * i + 2, col_id]
+            col_id += 1
+
+        return csc_matrix(B2)
+
+
 
     def global_step(self):
 
@@ -435,11 +465,11 @@ class Object:
 
         B1 = self.assemble_B1(self.C)
         print("B1 f")
-        # B2 = self.assemble_B2(self.C)
+        B2 = self.assemble_B2(self.C)
         exit()
         if self.C[self.N_surfaces-1] != -1:
             B1 = self.assemble_B1()
-            # B2 = self.assemble_B2()
+            B2 = self.assemble_B2()
         else:
             xn = self.x.to_numpy().reshape(dim)
             vn = self.v.to_numpy().reshape(dim)
