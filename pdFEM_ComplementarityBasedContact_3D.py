@@ -31,6 +31,10 @@ class Object:
         self.jacobi_alpha = 0.1
         self.stiffness = 1000
         self.epsilon = 1e-5
+        self.YoungsModulus = ti.field(ti.f32, ())
+        self.PoissonsRatio = ti.field(ti.f32, ())
+        self.LameMu = ti.field(ti.f32, ())
+        self.LameLa = ti.field(ti.f32, ())
 
         # time-step size (for simulation, 16.7ms)
         self.h = 0.2
@@ -50,6 +54,7 @@ class Object:
         self.count = ti.field(ti.i32, self.N)
         self.v = ti.Vector.field(3, ti.f32, self.N)
         self.elements_Dm_inv = ti.Matrix.field(3, 3, ti.f32, 5)
+        self.elements_V0 = ti.field(ti.f32, 5)
         self.elements_Dm = ti.Matrix.field(3, 3, ti.f32, 5)
         self.f_ext = ti.Vector.field(3, ti.f32, self.N)
         self.f = ti.Vector.field(3, ti.f32, self.N)
@@ -67,6 +72,7 @@ class Object:
 
         self.meshing()
         self.initialize()
+        self.updateLameCoeff()
         self.GcT, self.sum_GcTGc = self.initialize_Gc()
         self.initialize_elements()
         self.surface_nodes_np = np.zeros(self.N_surfaces, dtype=int)
@@ -188,7 +194,16 @@ class Object:
                 fid += 12
 
     @ti.kernel
+    def updateLameCoeff(self):
+        E = self.YoungsModulus[None]
+        nu = self.PoissonsRatio[None]
+        self.LameLa[None] = E * nu / ((1 + nu) * (1 - 2 * nu))
+        self.LameMu[None] = E / (2 * (1 + nu))
+
+    @ti.kernel
     def initialize(self):
+        self.YoungsModulus[None] = 1e4
+        self.PoissonsRatio[None] = 0
         # init position and velocity
         for i, j, k in ti.ndrange(self.N_x, self.N_y, self.N_z):
             index = self.ijk_2_index(i, j, k)
@@ -226,6 +241,7 @@ class Object:
             Dm = self.compute_D(i)
             self.elements_Dm[i] = Dm
             self.elements_Dm_inv[i] = Dm.inverse()
+            self.elements_V0[i] = ti.abs(Dm.determinant()) / 6
 
     def initialize_M(self):
         data = np.ones(3*self.N)
@@ -288,6 +304,13 @@ class Object:
     @ti.func
     def compute_F(self, i):
         return self.compute_D_in_local(i) @ self.elements_Dm_inv[i % 5]
+
+    @ti.func
+    def compute_P(self, i):
+        F = self.compute_F(i)
+        F_T = F.inverse().transpose()
+        J = max(F.determinant(), 0.01)
+        return self.LameMu[None] * (F - F_T) + self.LameLa[None] * ti.log(J) * F_T
 
     @ti.kernel
     def compute_elastic_force(self):
@@ -552,7 +575,7 @@ class Object:
     @ti.func
     def locate_C(self, C, ind):
         ptr = -1
-        for i in range(self.N_surfaces):
+        for i in ti.static(range(self.N_surfaces)):
             if int(C[i]) == ind:
                 ptr = i
         return ptr
@@ -569,35 +592,35 @@ class Object:
         for i in range(self.N):
             if obstacle[i] == 1:
                 # left
-                r_vec = ti.Vector([r[3*i+0], r[3*i+1], r[3*i+2]])
+                r_vec = ti.Vector([r[3*i+0,0], r[3*i+1,0], r[3*i+2,0]])
                 xl = self.x[i] - self.gripper_left_pos
                 dis = xl.dot(self.gripper_left_normal)
                 if (-epsilon <= dis <= epsilon) and (r_vec.dot(self.gripper_left_normal) >= 0):
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
-                if dis > 0 and -epsilon <= r[3*i+0] <= epsilon and -epsilon <= r[3*i+1] <= epsilon and -epsilon <= r[3*i+2] <= epsilon:
+                if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
 
             if obstacle[i] == 2:
                 # right
-                r_vec = ti.Vector([r[3*i+0], r[3*i+1], r[3*i+2]])
+                r_vec = ti.Vector([r[3*i+0,0], r[3*i+1,0], r[3*i+2,0]])
                 xr = self.x[i] - self.gripper_right_pos
                 dis = xr.dot(self.gripper_right_normal)
                 if (-epsilon <= dis <= epsilon) and (r_vec.dot(self.gripper_right_normal) >= 0):
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
-                if dis > 0 and -epsilon <= r[3*i+0] <= epsilon and -epsilon <= r[3*i+1] <= epsilon and -epsilon <= r[3*i+2] <= epsilon:
+                if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
 
             if obstacle[i] == 3:
                 # floor
                 dis = self.x[i][1] - self.floor_h
-                if (-epsilon <= dis <= epsilon) and (r[3*i+1] >= 0):
+                if (-epsilon <= dis <= epsilon) and (r[3*i+1,0] >= 0):
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
-                if dis > 0 and -epsilon <= r[3*i+0] <= epsilon and -epsilon <= r[3*i+1] <= epsilon and -epsilon <= r[3*i+2] <= epsilon:
+                if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
 
@@ -641,7 +664,7 @@ class Object:
                 x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
                 r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
 
-                self.update_C(self.C, r, self.obstacle)
+                self.update_C(self.C, r.toarray(), self.obstacle)
                 self.C.sort()
 
 cube = Object()
