@@ -13,10 +13,10 @@ def test2(ind):
 
 
 @ti.kernel
-def test(a: ti.types.ndarray(), ind: int) -> int:
+def test(a: ti.types.ndarray(), ind: int) -> ti.types.ndarray():
     vec = ti.Vector([a[i] for i in range(5)])
     print(vec)
-    return test2(3)
+    return np.arange(5)
 
 
 b = test(a, 3)

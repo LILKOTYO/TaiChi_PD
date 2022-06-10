@@ -429,7 +429,7 @@ class Object:
             self.jacobi()
 
     def assemble_B1(self, start, C):
-        c_ptr = 0
+        c_ptr = start
         first = True
         AinvIic_iter = np.arange(1)
         for i in range(self.N_surfaces):
@@ -446,21 +446,19 @@ class Object:
                     a3 = self.AinvIic.getcol(3 * i + 2).toarray()
                     AinvIic_iter = np.hstack((AinvIic_iter, a1, a2, a3))
                 c_ptr += 1
-                if c_ptr >= len(C)-1: break
+                if c_ptr >= len(C): break
         return csc_matrix(AinvIic_iter)
 
     @ti.kernel
-    def correct_x_star(self, C: ti.types.ndarray(), x_star: ti.types.ndarray()) -> ti.types.ndarray():
-        x_corrected = np.zeros(3*self.N)
+    def correct_x_star(self, C: ti.types.ndarray(), x_star: ti.types.ndarray(), x_corrected: ti.types.ndarray()):
         for i in range(3*self.N):
-            x_corrected[i] = x_star[i][0]
+            x_star[i] = x_corrected[i, 0]
         for i in range(self.N_surfaces):
             if C[i] != -1:
                 ind = C[i]
-                x_corrected[3 * ind + 0] = self.x[ind][0]
-                x_corrected[3 * ind + 1] = self.x[ind][1]
-                x_corrected[3 * ind + 2] = self.x[ind][2]
-        return x_corrected
+                x_star[3 * ind + 0] = self.x[ind][0]
+                x_star[3 * ind + 1] = self.x[ind][1]
+                x_star[3 * ind + 2] = self.x[ind][2]
 
     def global_step(self, sn):
         dim = 3 * self.N
@@ -543,8 +541,9 @@ class Object:
             ans2 = np.hstack(((bt @ B2).toarray(), (bt @ B1).toarray()))
             ans3 = linalg.spsolve(B4, csc_matrix(ans2).transpose())
             ans3 = csc_matrix(ans3).transpose()
-            x_star = (ans1 + B3 @ ans3).toarray()   # col vector
-            x_star = self.correct_x_star(self.C, x_star)
+            x_corrected = (ans1 + B3 @ ans3).toarray()   # col vector
+            x_star = np.zeros(3*self.N)
+            self.correct_x_star(self.C, x_star, x_corrected)
         else:
             b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ p
             x_star, info = linalg.cg(self.A, b, x0=xn)
