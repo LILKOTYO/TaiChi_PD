@@ -541,9 +541,6 @@ class Object:
             Acc = lil_matrix(Acc_np)
 
             B1 = self.assemble_B1(start, self.C)
-            print(Iic.get_shape())
-            print(B1.get_shape())
-            print(Acc.get_shape())
             B2 = Iic - B1 @ Acc
             B3 = np.hstack((B1.toarray(), B2.toarray()))
             B3 = csc_matrix(B3)
@@ -620,6 +617,7 @@ class Object:
                 if (-epsilon <= dis <= epsilon) and (r[3*i+1,0] >= 0):
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
+                    # print(r[3*i+1,0])
                 if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
@@ -651,21 +649,25 @@ class Object:
             self.updateVel()
         else:
             while self.C[self.N_surfaces - 1] != -1:
-
+                # print(self.C)
                 for i in range(10):
                     # initialize sn first? or x_C = x* first?
                     self.local_step()
                     x_star = self.global_step(sn)
                     self.updatePos(x_star)
                 self.updateVel()
+                print(self.x_old)
+                print(self.x)
 
                 self.compute_elastic_force()
                 fint = csc_matrix(self.f.to_numpy().reshape(dim)).transpose()
                 x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
+                print((x_spm - sn_spm).toarray())
                 r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
-
+                # print(r.toarray())
                 self.update_C(self.C, r.toarray(), self.obstacle)
                 self.C.sort()
+
 
 cube = Object()
 
