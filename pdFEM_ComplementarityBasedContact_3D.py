@@ -387,7 +387,7 @@ class Object:
             self.clear_iter_vector()
             self.jacobi()
 
-    def assemble_B1(self, C: ti.types.ndarray()):
+    def assemble_B1(self, start, C: ti.types.ndarray()):
         c_ptr = 0
         first = True
         AinvIic_iter = np.arange(1)
@@ -395,9 +395,9 @@ class Object:
             if C[c_ptr] == self.surface_nodes[i]:
                 if first:
                     first = False
-                    a1 = self.AinvIic.getcol(3*i+0).toarray()
-                    a2 = self.AinvIic.getcol(3*i+1).toarray()
-                    a3 = self.AinvIic.getcol(3*i+2).toarray()
+                    a1 = self.AinvIic.getcol(3 * i + 0).toarray()
+                    a2 = self.AinvIic.getcol(3 * i + 1).toarray()
+                    a3 = self.AinvIic.getcol(3 * i + 2).toarray()
                     AinvIic_iter = np.hstack((a1, a2, a3))
                 else:
                     a1 = self.AinvIic.getcol(3 * i + 0).toarray()
@@ -408,54 +408,18 @@ class Object:
                 if c_ptr >= len(C)-1: break
         return csc_matrix(AinvIic_iter)
 
-    def assemble_B2(self, C: ti.types.ndarray(), B1: lil_matrix):
-        # assemble Acc
-        first = True
-        last = 0
-        Acc_np = np.arange(1)
+    @ti.kernel
+    def correct_x_star(self, C: ti.types.ndarray(), x_star: ti.types.ndarray()) -> ti.types.ndarray():
+        x_corrected = np.zeros(3*self.N)
+        for i in range(3*self.N):
+            x_corrected[i] = x_star[i][0]
         for i in range(self.N_surfaces):
-            if C[i] == -1:
-                last = i
-                continue
-            else:
-                # assemble col
+            if C[i] != -1:
                 ind = C[i]
-                a1 = self.A.getcol(3 * ind + 0).toarray()
-                a2 = self.A.getcol(3 * ind + 1).toarray()
-                a3 = self.A.getcol(3 * ind + 2).toarray()
-                if first:
-                    first = False
-                    Acc_np = np.hstack((a1, a2, a3))
-                else:
-                    Acc_np = np.hstack((Acc_np, a1, a2, a3))
-        Acc = lil_matrix(Acc_np)
-        last += 1
-        first = True
-        for i in range(last, self.N_surfaces):
-            ind = C[i]
-            b1 = Acc.getrow(3 * ind + 0).toarray()
-            b2 = Acc.getrow(3 * ind + 1).toarray()
-            b3 = Acc.getrow(3 * ind + 2).toarray()
-            if first:
-                first = False
-                Acc_np = np.hstack((b1, b2, b3))
-            else:
-                Acc_np = np.hstack((Acc_np, b1, b2, b3))
-        Acc = lil_matrix(Acc_np)
-        B2 = -B1 @ Acc
-        col_id = 0
-        for i in range(last, self.N_surfaces):
-            ind = C[i]
-            B2[3 * i + 0, col_id] = 1.0 - B2[3 * i + 0, col_id]
-            col_id += 1
-            B2[3 * i + 1, col_id] = 1.0 - B2[3 * i + 1, col_id]
-            col_id += 1
-            B2[3 * i + 2, col_id] = 1.0 - B2[3 * i + 2, col_id]
-            col_id += 1
-
-        return csc_matrix(B2)
-
-
+                x_corrected[3 * ind + 0] = self.x[ind][0]
+                x_corrected[3 * ind + 1] = self.x[ind][1]
+                x_corrected[3 * ind + 2] = self.x[ind][2]
+        return x_corrected
 
     def global_step(self):
 
@@ -463,23 +427,88 @@ class Object:
         dh2_inv = self.dh_inv**2
         dh = self.dh
 
-        B1 = self.assemble_B1(self.C)
-        print("B1 f")
-        B2 = self.assemble_B2(self.C)
-        exit()
+        xn = self.x.to_numpy().reshape(dim)
+        vn = self.v.to_numpy().reshape(dim)
+        f_ext = self.f_ext.to_numpy().reshape(dim)
+        sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
+        p = self.x_proj.to_numpy().reshape(dim)
+
+        start = -1
         if self.C[self.N_surfaces-1] != -1:
-            B1 = self.assemble_B1()
-            B2 = self.assemble_B2()
-        else:
-            xn = self.x.to_numpy().reshape(dim)
-            vn = self.v.to_numpy().reshape(dim)
-            f_ext = self.f_ext.to_numpy().reshape(dim)
-            sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
-            p = self.x_proj.to_numpy().reshape(dim)
+
+            for i in range(self.N_surfaces):
+                if self.C[i] == -1:
+                    start = i
+                else: break
+            start += 1
+            num = self.N_surfaces - start
+            Iic = lil_matrix((3*self.N, 3*num))
+            col_id = 0
+            for i in range(start, self.N_surfaces):
+                # assemble Iic
+                ind = self.C[i]
+                Iic[3 * ind + 0, col_id] = 1
+                col_id += 1
+                Iic[3 * ind + 1, col_id] = 1
+                col_id += 1
+                Iic[3 * ind + 2, col_id] = 1
+                col_id += 1
+            # assemble Acc
+            first = True
+            Aic_np = np.arange(1)
+            Acc_np = np.arange(1)
+            for i in range(start, self.N_surfaces):
+                # assemble col
+                ind = self.C[i]
+                a1 = self.A.getcol(3 * ind + 0).toarray()
+                a2 = self.A.getcol(3 * ind + 1).toarray()
+                a3 = self.A.getcol(3 * ind + 2).toarray()
+                if first:
+                    first = False
+                    Aic_np = np.hstack((a1, a2, a3))
+                else:
+                    Aic_np = np.hstack((Aic_np, a1, a2, a3))
+            Aic = lil_matrix(Aic_np)
+            first = True
+            for i in range(start, self.N_surfaces):
+                # assemble row
+                ind = self.C[i]
+                b1 = Aic.getrow(3 * ind + 0).toarray()
+                b2 = Aic.getrow(3 * ind + 1).toarray()
+                b3 = Aic.getrow(3 * ind + 2).toarray()
+                if first:
+                    first = False
+                    Acc_np = np.vstack((b1, b2, b3))
+                else:
+                    Acc_np = np.vstack((Acc_np, b1, b2, b3))
+            Acc = lil_matrix(Acc_np)
+
+            B1 = self.assemble_B1(start, self.C)
+            B2 = Iic - B1 @ Acc
+            B3 = np.hstack((B1.toarray(), B2.toarray()))
+            B3 = csc_matrix(B3)
+            PURt = (Aic - Iic @ Acc).transpose()
+            PULt = Iic.transpose()
+            VPt = np.vstack((PURt.toarray(), PULt.toarray()))
+            data = np.ones(6 * num)
+            offset = np.array([0])
+            I2c2c = dia_matrix((data, offset), shape=(6 * num, 6 * num))
+            B4 = I2c2c - VPt @ B3
+
             x_b = self.x_b.to_numpy().reshape(dim)
             b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ (p - x_b)
-            x_star, info = linalg.cg(self.A, b, x0=xn)
 
+            bt = csc_matrix(b)
+            ans1, info = linalg.cg(self.A, b, x0=xn)
+            ans1 = csc_matrix(ans1).transpose() # col vector
+            ans2 = np.hstack(((bt @ B2).toarray(), (bt @ B1).toarray()))
+            ans3 = linalg.spsolve(B4, csc_matrix(ans2).transpose())
+            ans3 = csc_matrix(ans3).transpose()
+            x_star = (ans1 + B3 @ ans3).toarray()   # col vector
+            x_star = self.correct_x_star(self.C, x_star)
+        else:
+            b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ p
+            x_star, info = linalg.cg(self.A, b, x0=xn)
         return x_star
 
     def update(self):

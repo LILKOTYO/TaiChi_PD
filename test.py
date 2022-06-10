@@ -3,19 +3,55 @@ import numpy as np
 from scipy.sparse import csc_matrix, csr_matrix, linalg, lil_matrix
 import math
 
-A = lil_matrix((3, 4))
+a = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+A = csc_matrix(a)
+b = np.array([[0.0, 2.0, 3.0]])
+B = csc_matrix(b)
+Bt = B.transpose()
+print(type(A@Bt))
+print(type(Bt))
+res = (A@Bt + Bt).toarray()
+print(res)
+print(res[0])
+print(res[0][0])
 
-def change(a: lil_matrix):
-    a[0, 0] = 1
-    a[0, 2] = 5
-    a[2, 2] = 6
 
-change(A)
-print(A.toarray())
-A[0, 2] = 1 - A[0, 2]
-print(type(A[0, 2]))
-print(A.toarray())
-print(type(A))
+# b = np.arange(5)
+# print(b)
+# B = csc_matrix(b)
+# print(B.toarray())
+# A = B.transpose() @ B
+# print(type(A))
+# print(A.toarray().transpose())
+# A = lil_matrix((3, 3))
+# A[0, 0] = 1
+# A[0, 2] = 5
+# A[2, 2] = 6
+# B = lil_matrix((3, 3))
+# B[1, 1] = 3
+# B[2, 2] = 7
+# # C_np = np.hstack((A.toarray(), B.toarray()))
+# # print(C_np)
+# D = A @ B
+# E = A - D
+# print(type(D))
+# print(D.toarray())
+# print(type(E))
+# print(type(A))
+# print(E.toarray())
+# A = lil_matrix((3, 4))
+#
+# def change(a: lil_matrix):
+#     a[0, 0] = 1
+#     a[0, 2] = 5
+#     a[2, 2] = 6
+#
+# change(A)
+# print(A.toarray())
+# A[0, 2] = 1 - A[0, 2]
+# print(type(A[0, 2]))
+# print(A.toarray())
+# print(type(A))
 # ti.init(arch=ti.gpu)
 # a = np.array([-1 for i in range(10)])
 # print(a)

@@ -27,7 +27,7 @@ class Object:
         self.gravity = 9.8
         self.jacobi_iter = 10
         self.jacobi_alpha = 0.1
-        self.stiffness = 1000
+        self.stiffness = 5000
 
         # time-step size (for simulation, 16.7ms)
         self.h = 0.2
@@ -42,6 +42,7 @@ class Object:
         self.x = ti.Vector.field(3, ti.f32, self.N)
         self.x_proj = ti.Vector.field(3, ti.f32, self.N)
         self.x_iter = ti.Vector.field(3, ti.f32, self.N)
+        self.x_old = ti.Vector.field(3, ti.f32, self.N)
         self.count = ti.field(ti.i32, self.N)
         self.v = ti.Vector.field(3, ti.f32, self.N)
         self.elements_Dm_inv = ti.Matrix.field(3, 3, ti.f32, 5)
@@ -276,9 +277,18 @@ class Object:
     def updatePosVel(self, x_star: ti.types.ndarray()):
         for i in range(self.N):
             x_new = ti.Vector([x_star[3*i+0], x_star[3*i+1], x_star[3*i+2]])
-            self.v[i] = self.dh_inv * (x_new - self.x[i])
+            # self.v[i] = self.dh_inv * (x_new - self.x[i])
             self.x[i] = x_new
             if x_new[1] < 0.1:
+                self.x[i][1] = 0.1
+                # if self.v[i][1] < 0:
+                #     self.v[i][1] = 0.0
+
+    @ti.kernel
+    def updateVel(self):
+        for i in range(self.N):
+            self.v[i] = (self.x[i] - self.x_old[i]) * self.dh_inv
+            if self.x[i][1] < 0.1:
                 self.x[i][1] = 0.1
                 if self.v[i][1] < 0:
                     self.v[i][1] = 0.0
@@ -291,15 +301,11 @@ class Object:
             self.clear_iter_vector()
             self.jacobi()
 
-    def global_step(self):
+    def global_step(self, sn):
         dim = 3 * self.N
         dh2_inv = self.dh_inv**2
-        dh = self.dh
 
         xn = self.x.to_numpy().reshape(dim)
-        vn = self.v.to_numpy().reshape(dim)
-        f_ext = self.f_ext.to_numpy().reshape(dim)
-        sn = xn + dh * vn + (dh**2) * linalg.inv(self.M) @ f_ext
         p = self.x_proj.to_numpy().reshape(dim)
         b = dh2_inv * self.M @ sn + self.stiffness * self.sum_GcTGc @ p
         x_star, info = linalg.cg(self.A, b, x0=xn)
@@ -307,9 +313,22 @@ class Object:
         return x_star
 
     def update(self):
-        self.local_step()
-        x_star = self.global_step()
-        self.updatePosVel(x_star)
+        dim = 3 * self.N
+        dh = self.dh
+
+        self.x_old.copy_from(self.x)
+
+        xn = self.x.to_numpy().reshape(dim)
+        vn = self.v.to_numpy().reshape(dim)
+        f_ext = self.f_ext.to_numpy().reshape(dim)
+        sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
+
+        for i in range(10):
+            self.local_step()
+            x_star = self.global_step(sn)
+            self.updatePosVel(x_star)
+
+        self.updateVel()
 
 
 cube = Object()
