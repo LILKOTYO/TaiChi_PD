@@ -2,22 +2,42 @@ import taichi as ti
 import numpy as np
 from scipy.sparse import csc_matrix, csr_matrix, linalg, lil_matrix
 import math
+ti.init(arch=ti.gpu)
 
-a = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-A = csc_matrix(a)
-b = np.array([[0.0, 2.0, 3.0]])
-B = csc_matrix(b)
-c = np.array([0.0, 0.0, 0.0])
-C = csc_matrix(c)
-print(C.get_shape())
-print(B.get_shape())
-print(C.toarray())
-print(B.toarray())
-Bt = B.transpose()
-print(type(A@Bt))
-print(type(Bt))
-res = (A@Bt + Bt).toarray()
-print(res)
+a = np.zeros(5)
+
+@ti.func
+def test2(ind):
+    print(ind)
+    return 5
+
+
+@ti.kernel
+def test(a: ti.types.ndarray(), ind: int) -> int:
+    vec = ti.Vector([a[i] for i in range(5)])
+    print(vec)
+    return test2(3)
+
+
+b = test(a, 3)
+print(a)
+print(b)
+
+# a = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+# A = csc_matrix(a)
+# b = np.array([[0.0, 2.0, 3.0]])
+# B = csc_matrix(b)
+# c = np.array([0.0, 0.0, 0.0])
+# C = csc_matrix(c)
+# print(C.get_shape())
+# print(B.get_shape())
+# print(C.toarray())
+# print(B.toarray())
+# Bt = B.transpose()
+# print(type(A@Bt))
+# print(type(Bt))
+# res = (A@Bt + Bt).toarray()
+# print(res)
 
 
 
