@@ -44,12 +44,14 @@ class Object:
         self.x = ti.Vector.field(3, ti.f32, self.N)
         self.x_proj = ti.Vector.field(3, ti.f32, self.N)
         self.x_iter = ti.Vector.field(3, ti.f32, self.N)
+        self.x_old = ti.Vector.field(3, ti.f32, self.N)
         self.x_b = ti.Vector.field(3, ti.f32, self.N)
         self.count = ti.field(ti.i32, self.N)
         self.v = ti.Vector.field(3, ti.f32, self.N)
         self.elements_Dm_inv = ti.Matrix.field(3, 3, ti.f32, 5)
         self.elements_Dm = ti.Matrix.field(3, 3, ti.f32, 5)
         self.f_ext = ti.Vector.field(3, ti.f32, self.N)
+        self.f = ti.Vector.field(3, ti.f32, self.N)
 
         # geometric components
         self.tetrahedrons = ti.Vector.field(4, ti.i32, self.N_tetrahedron)
@@ -282,6 +284,30 @@ class Object:
     def compute_F(self, i):
         return self.compute_D_in_local(i) @ self.elements_Dm_inv[i % 5]
 
+    @ti.kernel
+    def compute_elastic_force(self):
+        for i in range(self.N):
+            self.f[i] = ti.Vector([0, 0, 0])
+
+        for i in range(self.N_tetrahedron):
+            loc_id = i % 5
+            P = self.compute_P(i)
+            H = - self.elements_V0[loc_id] * (P @ self.elements_Dm_inv[loc_id].transpose())
+            h1 = ti.Vector([H[0, 0], H[1, 0], H[2, 0]])
+            h2 = ti.Vector([H[0, 1], H[1, 1], H[2, 1]])
+            h3 = ti.Vector([H[0, 2], H[1, 2], H[2, 2]])
+
+            q = self.tetrahedrons[i][0]
+            w = self.tetrahedrons[i][1]
+            e = self.tetrahedrons[i][2]
+            r = self.tetrahedrons[i][3]
+
+            self.f[q] += h1
+            self.f[w] += h2
+            self.f[e] += h3
+            self.f[r] += -(h1 + h2 + h3)
+
+
     @ti.func
     def initialize_iter_vector(self):
         for i in range(self.N):
@@ -373,11 +399,15 @@ class Object:
             self.x_proj[i] = (self.x_iter[i] + self.jacobi_alpha * self.x_proj[i]) / (self.count[i] + self.jacobi_alpha)
 
     @ti.kernel
-    def updatePosVel(self, x_star: ti.types.ndarray()):
+    def updatePos(self, x_star: ti.types.ndarray()):
         for i in range(self.N):
             x_new = ti.Vector([x_star[3*i+0], x_star[3*i+1], x_star[3*i+2]])
-            self.v[i] = self.dh_inv * (x_new - self.x[i])
             self.x[i] = x_new
+
+    @ti.kernel
+    def updateVel(self):
+        for i in range(self.N):
+            self.v[i] = (self.x[i] - self.x_old[i]) * self.dh_inv
 
     @ti.kernel
     def local_step(self):
@@ -421,16 +451,11 @@ class Object:
                 x_corrected[3 * ind + 2] = self.x[ind][2]
         return x_corrected
 
-    def global_step(self):
-
+    def global_step(self, sn):
         dim = 3 * self.N
         dh2_inv = self.dh_inv**2
-        dh = self.dh
 
         xn = self.x.to_numpy().reshape(dim)
-        vn = self.v.to_numpy().reshape(dim)
-        f_ext = self.f_ext.to_numpy().reshape(dim)
-        sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
         p = self.x_proj.to_numpy().reshape(dim)
 
         start = -1
@@ -511,14 +536,49 @@ class Object:
             x_star, info = linalg.cg(self.A, b, x0=xn)
         return x_star
 
+    @ti.kernel
+    def initialize_solution(self, sn: ti.types.ndarray()):
+        for i in range(self.N):
+            self.x[i] = ti.Vector([sn[3 * i + 0], sn[3 * i + 1], sn[3 * i + 2]])
+
+    @ti.kernel
+    def update_C(self, r: ti.types.ndarray()):
+
+
+
     def update(self):
-        # initialize sn first? or x_C = x* first?
+        dim = 3 * self.N
+        dh = self.dh
+        dh2_inv = self.dh_inv**2
+
+        self.x_old.copy_from(self.x)
+
+        xn = self.x.to_numpy().reshape(dim)
+        vn = self.v.to_numpy().reshape(dim)
+        f_ext = self.f_ext.to_numpy().reshape(dim)
+        sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
+        sn_spm = csc_matrix(sn).transpose()
+
+        self.initialize_solution(sn)
         self.clear_C(self.C)
         self.contact_detect(self.C)
         self.C.sort()
-        self.local_step()
-        x_star = self.global_step()
-        self.updatePosVel(x_star)
+
+        while self.C[self.N_surfaces] != -1:
+
+            for i in range(10):
+                # initialize sn first? or x_C = x* first?
+                self.local_step()
+                x_star = self.global_step(sn)
+                self.updatePos(x_star)
+            self.updateVel()
+
+            self.compute_elastic_force()
+            fint = csc_matrix(self.f.to_numpy().reshape(dim)).transpose()
+            x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
+            r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
+
+            self.update_C(r)
 
 
 cube = Object()

@@ -274,15 +274,12 @@ class Object:
             self.x_proj[i] = (self.x_iter[i] + self.jacobi_alpha * self.x_proj[i]) / (self.count[i] + self.jacobi_alpha)
 
     @ti.kernel
-    def updatePosVel(self, x_star: ti.types.ndarray()):
+    def updatePos(self, x_star: ti.types.ndarray()):
         for i in range(self.N):
             x_new = ti.Vector([x_star[3*i+0], x_star[3*i+1], x_star[3*i+2]])
-            # self.v[i] = self.dh_inv * (x_new - self.x[i])
             self.x[i] = x_new
             if x_new[1] < 0.1:
                 self.x[i][1] = 0.1
-                # if self.v[i][1] < 0:
-                #     self.v[i][1] = 0.0
 
     @ti.kernel
     def updateVel(self):
@@ -312,6 +309,11 @@ class Object:
 
         return x_star
 
+    @ti.kernel
+    def initialize_solution(self, sn: ti.types.ndarray()):
+        for i in range(self.N):
+            self.x[i] = ti.Vector([sn[3*i+0], sn[3*i+1], sn[3*i+2]])
+
     def update(self):
         dim = 3 * self.N
         dh = self.dh
@@ -323,10 +325,12 @@ class Object:
         f_ext = self.f_ext.to_numpy().reshape(dim)
         sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
 
+        self.initialize_solution(sn)
+
         for i in range(10):
             self.local_step()
             x_star = self.global_step(sn)
-            self.updatePosVel(x_star)
+            self.updatePos(x_star)
 
         self.updateVel()
 
