@@ -722,29 +722,6 @@ class Object:
                 self.updateVel()
                 break
 
-        # print(self.v)
-        # while True:
-        #     self.initialize_solution(sn, self.obstacle)
-        #     for i in range(10):
-        #         # initialize sn first? or x_C = x* first?
-        #         self.local_step()
-        #         x_star = self.global_step(sn)
-        #         self.updatePos(x_star)
-        #
-        #     if self.C[self.N_surfaces-1] != -1:
-        #         self.contact_detect(self.C, self.obstacle)
-        #         self.C.sort()
-        #         if self.C[self.N_surfaces-1] != -1:
-        #
-        #     else:
-        #         self.compute_elastic_force()
-        #         fint = csc_matrix(self.f.to_numpy().reshape(dim)).transpose()
-        #         x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
-        #         r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
-        #         self.update_C(self.C, r.toarray(), self.obstacle)
-        #         self.C.sort()
-        #     if self.C[self.N_surfaces-1] == -1: break
-
 
 cube = Object()
 
