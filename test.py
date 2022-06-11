@@ -3,25 +3,29 @@ import numpy as np
 from scipy.sparse import csc_matrix, csr_matrix, linalg, lil_matrix
 import math
 ti.init(arch=ti.gpu)
-
-a = np.zeros(5)
-
-@ti.func
-def test2(ind):
-    print(ind)
-    return 5
-
-
-@ti.kernel
-def test(a: ti.types.ndarray(), ind: int) -> ti.types.ndarray():
-    vec = ti.Vector([a[i] for i in range(5)])
-    print(vec)
-    return np.arange(5)
-
-
-b = test(a, 3)
+q = 1
+w = 2
+a = q < 5 and w > 3
 print(a)
-print(b)
+
+# a = np.zeros(5)
+#
+# @ti.func
+# def test2(ind):
+#     print(ind)
+#     return 5
+#
+#
+# @ti.kernel
+# def test(a: ti.types.ndarray(), ind: int) -> ti.types.ndarray():
+#     vec = ti.Vector([a[i] for i in range(5)])
+#     print(vec)
+#     return np.arange(5)
+#
+#
+# b = test(a, 3)
+# print(a)
+# print(b)
 
 # a = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
 # A = csc_matrix(a)

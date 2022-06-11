@@ -26,11 +26,11 @@ class Object:
 
         # physical quantities
         self.mass = 1
-        self.gravity = 9.8
+        self.gravity = 5.0
         self.jacobi_iter = 10
         self.jacobi_alpha = 0.1
         self.stiffness = 1000
-        self.epsilon = 1e-5
+        self.epsilon = 1e-20
         self.YoungsModulus = ti.field(ti.f32, ())
         self.PoissonsRatio = ti.field(ti.f32, ())
         self.LameMu = ti.field(ti.f32, ())
@@ -99,6 +99,9 @@ class Object:
         # contact
         self.C = np.array([-1 for i in range(self.N_surfaces)])
         self.obstacle = np.array([-1 for i in range(self.N)]) # left = 1, right = 2, floor = 3
+
+        # debug
+        self.before_contact = True
 
     @ti.func
     def ijk_2_index(self, i, j, k):
@@ -303,6 +306,10 @@ class Object:
 
     @ti.func
     def compute_F(self, i):
+        return self.compute_D(i) @ self.elements_Dm_inv[i % 5]
+
+    @ti.func
+    def compute_F_in_local(self, i):
         return self.compute_D_in_local(i) @ self.elements_Dm_inv[i % 5]
 
     @ti.func
@@ -339,8 +346,6 @@ class Object:
     def initialize_iter_vector(self):
         for i in range(self.N):
             self.x_proj[i] = self.x[i]
-            self.x_iter[i] = ti.Vector([0.0, 0.0, 0.0])
-            self.count[i] = 0
 
     @ti.func
     def clear_iter_vector(self):
@@ -364,11 +369,48 @@ class Object:
             ind = self.surface_nodes[i]
             old_pos = self.x[ind]
             new_pos = old_pos + self.dh * self.v[ind]
+            flag_left = (new_pos - self.gripper_left_pos).dot(self.gripper_left_normal) <= 0 and (old_pos - self.gripper_left_pos).dot(self.gripper_left_normal) >= 0
+            flag_right = (new_pos - self.gripper_right_pos).dot(self.gripper_right_normal) <= 0 and (old_pos - self.gripper_right_pos).dot(self.gripper_right_normal) >= 0
+            flag_floor = (new_pos[1] - self.floor_h) <= 0 and (old_pos[1] - self.floor_h) >= 0
+
+            if flag_left and flag_right:
+                print("SOMETHING WRONG !!!")
+
+            if flag_left:
+                t_left = (self.gripper_left_pos - self.x[ind]).dot(self.gripper_left_normal) \
+                         / (self.v[ind].dot(self.gripper_left_normal))
+                # self.x[ind] = self.x[ind] + t_left * self.v[ind]
+                self.x_b[ind] = self.x[ind] + t_left * self.v[ind]
+                C[i] = ind
+                obstacle[ind] = 1
+
+            if flag_right:
+                t_right = (self.gripper_right_pos - self.x[ind]).dot(self.gripper_right_normal) \
+                          / (self.v[ind].dot(self.gripper_right_normal))
+                # self.x[ind] = self.x[ind] + t_right * self.v[ind]
+                self.x_b[ind] = self.x[ind] + t_right * self.v[ind]
+                C[i] = ind
+                obstacle[ind] = 2
+
+            # floor
+            if flag_floor:
+                t_floor = (self.floor_h - self.x[ind][1]) / self.v[ind][1]
+                # self.x[ind] = self.x[ind] + t_floor * self.v[ind]
+                self.x_b[ind] = self.x[ind] + t_floor * self.v[ind]
+                C[i] = ind
+                obstacle[ind] = 3
+
+    @ti.kernel
+    def contact_detect_in_loop(self, C: ti.types.ndarray(), obstacle: ti.types.ndarray()):
+        for i in range(self.N_surfaces):
+            ind = self.surface_nodes[i]
+            old_pos = self.x[ind]
+            new_pos = old_pos + self.dh * self.v[ind]
             flag_left = (new_pos - self.gripper_left_pos).dot(self.gripper_left_normal) \
                         * (old_pos - self.gripper_left_pos).dot(self.gripper_left_normal)
             flag_right = (new_pos - self.gripper_right_pos).dot(self.gripper_right_normal) \
-                        * (old_pos - self.gripper_right_pos).dot(self.gripper_right_normal)
-            flag_floor = new_pos[1] * old_pos[1]
+                         * (old_pos - self.gripper_right_pos).dot(self.gripper_right_normal)
+            flag_floor = (new_pos[1] - self.floor_h) * (old_pos[1] - self.floor_h)
 
             if flag_left <= 0 or flag_right <= 0:
                 print("SOMETHING WRONG !!!")
@@ -376,31 +418,25 @@ class Object:
             if flag_left <= 0:
                 t_left = (self.gripper_left_pos - self.x[ind]).dot(self.gripper_left_normal) \
                          / (self.v[ind].dot(self.gripper_left_normal))
-                self.x[ind] = self.x[ind] + t_left * self.v[ind]
-                self.x_b[ind] = self.x[ind]
                 C[i] = ind
                 obstacle[ind] = 1
 
             if flag_right <= 0:
                 t_right = (self.gripper_right_pos - self.x[ind]).dot(self.gripper_right_normal) \
                           / (self.v[ind].dot(self.gripper_right_normal))
-                self.x[ind] = self.x[ind] + t_right * self.v[ind]
-                self.x_b[ind] = self.x[ind]
                 C[i] = ind
                 obstacle[ind] = 2
 
             # floor
             if flag_floor <= 0:
                 t_floor = (self.floor_h - self.x[ind][1]) / self.v[ind][1]
-                self.x[ind] = self.x[ind] + t_floor * self.v[ind]
-                self.x_b[ind] = self.x[ind]
                 C[i] = ind
                 obstacle[ind] = 3
 
     @ti.func
     def jacobi(self):
         for it in range(self.N_tetrahedron):
-            F = self.compute_F(it)
+            F = self.compute_F_in_local(it)
             U, S, V = ti.svd(F)
             S[0, 0] = min(max(0.95, S[0, 0]), 1.05)
             S[1, 1] = min(max(0.95, S[1, 1]), 1.05)
@@ -442,6 +478,18 @@ class Object:
     def updateVel(self):
         for i in range(self.N):
             self.v[i] = (self.x[i] - self.x_old[i]) * self.dh_inv
+        # print(self.v[self.ijk_2_index(self.N_x-1,0,self.N_z-1)])
+
+    # @ti.kernel
+    # def updateVel_contact(self, copy_c: ti.types.ndarray()):
+    #     for i in range(self.N):
+    #         for j in range(self.N_surfaces):
+    #             if copy_c[j] == i:
+    #                 print(self.x_old[i] + self.v[i] * self.dh)
+    #                 self.v[i] = (self.x[i] - (self.x_old[i] + self.dh * self.v[i])) * self.dh_inv
+    #                 # print("corrected v ", self.x[i], self.x_old[i] + self.dh * self.v[i])
+    #             else:
+    #                 self.v[i] = (self.x[i] - self.x_old[i]) * self.dh_inv
 
     @ti.kernel
     def local_step(self):
@@ -479,9 +527,9 @@ class Object:
         for i in range(self.N_surfaces):
             if C[i] != -1:
                 ind = C[i]
-                x_star[3 * ind + 0] = self.x[ind][0]
-                x_star[3 * ind + 1] = self.x[ind][1]
-                x_star[3 * ind + 2] = self.x[ind][2]
+                x_star[3 * ind + 0] = self.x_b[ind][0]
+                x_star[3 * ind + 1] = self.x_b[ind][1]
+                x_star[3 * ind + 2] = self.x_b[ind][2]
 
     def global_step(self, sn):
         dim = 3 * self.N
@@ -492,7 +540,6 @@ class Object:
 
         start = -1
         if self.C[self.N_surfaces-1] != -1:
-
             for i in range(self.N_surfaces):
                 if self.C[i] == -1:
                     start = i
@@ -578,14 +625,18 @@ class Object:
         return ptr
 
     @ti.kernel
-    def initialize_solution(self, sn: ti.types.ndarray()):
+    def initialize_solution(self, sn: ti.types.ndarray(), obstacle: ti.types.ndarray()):
         for i in range(self.N):
-            self.x[i] = ti.Vector([sn[3 * i + 0], sn[3 * i + 1], sn[3 * i + 2]])
+            if obstacle[i] == -1:
+                self.x[i] = ti.Vector([sn[3 * i + 0], sn[3 * i + 1], sn[3 * i + 2]])
+            else:
+                self.x[i] = self.x_b[i]
 
     @ti.kernel
     def update_C(self, C: ti.types.ndarray(), r: ti.types.ndarray(), obstacle: ti.types.ndarray()):
         epsilon = self.epsilon
         C_vec = ti.Vector([C[i] for i in range(self.N_surfaces)])
+
         for i in range(self.N):
             if obstacle[i] == 1:
                 # left
@@ -614,13 +665,16 @@ class Object:
             if obstacle[i] == 3:
                 # floor
                 dis = self.x[i][1] - self.floor_h
+                # print(dis)
+                # print(r[3*i+1, 0])
                 if (-epsilon <= dis <= epsilon) and (r[3*i+1,0] >= 0):
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
-                    # print(r[3*i+1,0])
+                    print("method 1")
                 if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
                     C[self.locate_C(C_vec, i)] = -1
                     obstacle[i] = -1
+                    print("method 2")
 
     def update(self):
         dim = 3 * self.N
@@ -635,38 +689,61 @@ class Object:
         sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
         sn_spm = csc_matrix(sn).transpose()
 
-        self.initialize_solution(sn)
         self.clear_C(self.C, self.obstacle)
         self.contact_detect(self.C, self.obstacle)
         self.C.sort()
+        print(self.C)
 
-        if self.C[self.N_surfaces-1] == -1:
+        # if self.C[self.N_surfaces-1] == -1:
+        #     self.initialize_solution(sn, self.obstacle)
+        #     for i in range(10):
+        #         # initialize sn first? or x_C = x* first?
+        #         self.local_step()
+        #         x_star = self.global_step(sn)
+        #         self.updatePos(x_star)
+        #     self.updateVel()
+        # else:
+        while True:
+            self.initialize_solution(sn, self.obstacle)
             for i in range(10):
                 # initialize sn first? or x_C = x* first?
                 self.local_step()
                 x_star = self.global_step(sn)
                 self.updatePos(x_star)
-            self.updateVel()
-        else:
-            while self.C[self.N_surfaces - 1] != -1:
-                # print(self.C)
-                for i in range(10):
-                    # initialize sn first? or x_C = x* first?
-                    self.local_step()
-                    x_star = self.global_step(sn)
-                    self.updatePos(x_star)
-                self.updateVel()
-                print(self.x_old)
-                print(self.x)
 
-                self.compute_elastic_force()
-                fint = csc_matrix(self.f.to_numpy().reshape(dim)).transpose()
-                x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
-                print((x_spm - sn_spm).toarray())
-                r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
-                # print(r.toarray())
-                self.update_C(self.C, r.toarray(), self.obstacle)
-                self.C.sort()
+            self.compute_elastic_force()
+            fint = csc_matrix(self.f.to_numpy().reshape(dim)).transpose()
+            x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
+            r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
+            self.update_C(self.C, r.toarray(), self.obstacle)
+            self.C.sort()
+            # print("after update", self.C)
+            if self.C[self.N_surfaces - 1] == -1:
+                self.updateVel()
+                break
+
+        # print(self.v)
+        # while True:
+        #     self.initialize_solution(sn, self.obstacle)
+        #     for i in range(10):
+        #         # initialize sn first? or x_C = x* first?
+        #         self.local_step()
+        #         x_star = self.global_step(sn)
+        #         self.updatePos(x_star)
+        #
+        #     if self.C[self.N_surfaces-1] != -1:
+        #         self.contact_detect(self.C, self.obstacle)
+        #         self.C.sort()
+        #         if self.C[self.N_surfaces-1] != -1:
+        #
+        #     else:
+        #         self.compute_elastic_force()
+        #         fint = csc_matrix(self.f.to_numpy().reshape(dim)).transpose()
+        #         x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
+        #         r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
+        #         self.update_C(self.C, r.toarray(), self.obstacle)
+        #         self.C.sort()
+        #     if self.C[self.N_surfaces-1] == -1: break
 
 
 cube = Object()
