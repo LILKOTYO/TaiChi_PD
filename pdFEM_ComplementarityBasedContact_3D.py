@@ -687,6 +687,7 @@ class Object:
             self.initialize_solution(sn, self.obstacle)
             for i in range(20):
                 self.local_step()
+                print(self.x_proj[2])
                 x_star = self.global_step(sn, length)
                 self.updatePos(x_star)
 
