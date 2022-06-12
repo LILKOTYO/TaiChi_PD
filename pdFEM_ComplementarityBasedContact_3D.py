@@ -681,8 +681,8 @@ class Object:
         new_length = length
 
         while True:
-            print(self.C)
-            print(self.obstacle)
+            print("before: ", self.C)
+            # print(self.obstacle)
             length = new_length
             self.initialize_solution(sn, self.obstacle)
             for i in range(20):
@@ -696,9 +696,11 @@ class Object:
             r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
             self.update_C(self.C, r.toarray(), self.obstacle)
             new_length = self.is_contact(self.C)
-            print(r.toarray())
+            print("after: ", self.C)
+            print(length, new_length)
             if length == new_length:
                 self.updateVel()
+                print(self.v[2])
                 break
 
 
