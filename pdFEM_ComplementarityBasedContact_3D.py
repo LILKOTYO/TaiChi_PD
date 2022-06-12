@@ -98,10 +98,11 @@ class Object:
 
         # contact
         self.C = np.array([-1 for i in range(self.N_surfaces)])
-        self.obstacle = np.array([-1 for i in range(self.N)]) # left = 1, right = 2, floor = 3
+        self.obstacle = np.array([-1 for i in range(self.N_surfaces)]) # left = 1, right = 2, floor = 3
 
         # debug
         self.before_contact = True
+        print(self.surface_nodes)
 
     @ti.func
     def ijk_2_index(self, i, j, k):
@@ -362,6 +363,14 @@ class Object:
             obstacle[i] = -1
 
     @ti.kernel
+    def is_contact(self, C: ti.types.ndarray()) -> int:
+        res = 0
+        for i in range(self.N_surfaces):
+            if C[i] != -1:
+                res += 1
+        return res
+
+    @ti.kernel
     def contact_detect(self, C: ti.types.ndarray(), obstacle: ti.types.ndarray()):
         for i in range(self.N):
             self.x_b[i] = ti.Vector([0.0, 0.0, 0.0])
@@ -382,7 +391,7 @@ class Object:
                 # self.x[ind] = self.x[ind] + t_left * self.v[ind]
                 self.x_b[ind] = self.x[ind] + t_left * self.v[ind]
                 C[i] = ind
-                obstacle[ind] = 1
+                obstacle[i] = 1
 
             if flag_right:
                 t_right = (self.gripper_right_pos - self.x[ind]).dot(self.gripper_right_normal) \
@@ -390,7 +399,7 @@ class Object:
                 # self.x[ind] = self.x[ind] + t_right * self.v[ind]
                 self.x_b[ind] = self.x[ind] + t_right * self.v[ind]
                 C[i] = ind
-                obstacle[ind] = 2
+                obstacle[i] = 2
 
             # floor
             if flag_floor:
@@ -398,40 +407,7 @@ class Object:
                 # self.x[ind] = self.x[ind] + t_floor * self.v[ind]
                 self.x_b[ind] = self.x[ind] + t_floor * self.v[ind]
                 C[i] = ind
-                obstacle[ind] = 3
-
-    @ti.kernel
-    def contact_detect_in_loop(self, C: ti.types.ndarray(), obstacle: ti.types.ndarray()):
-        for i in range(self.N_surfaces):
-            ind = self.surface_nodes[i]
-            old_pos = self.x[ind]
-            new_pos = old_pos + self.dh * self.v[ind]
-            flag_left = (new_pos - self.gripper_left_pos).dot(self.gripper_left_normal) \
-                        * (old_pos - self.gripper_left_pos).dot(self.gripper_left_normal)
-            flag_right = (new_pos - self.gripper_right_pos).dot(self.gripper_right_normal) \
-                         * (old_pos - self.gripper_right_pos).dot(self.gripper_right_normal)
-            flag_floor = (new_pos[1] - self.floor_h) * (old_pos[1] - self.floor_h)
-
-            if flag_left <= 0 or flag_right <= 0:
-                print("SOMETHING WRONG !!!")
-
-            if flag_left <= 0:
-                t_left = (self.gripper_left_pos - self.x[ind]).dot(self.gripper_left_normal) \
-                         / (self.v[ind].dot(self.gripper_left_normal))
-                C[i] = ind
-                obstacle[ind] = 1
-
-            if flag_right <= 0:
-                t_right = (self.gripper_right_pos - self.x[ind]).dot(self.gripper_right_normal) \
-                          / (self.v[ind].dot(self.gripper_right_normal))
-                C[i] = ind
-                obstacle[ind] = 2
-
-            # floor
-            if flag_floor <= 0:
-                t_floor = (self.floor_h - self.x[ind][1]) / self.v[ind][1]
-                C[i] = ind
-                obstacle[ind] = 3
+                obstacle[i] = 3
 
     @ti.func
     def jacobi(self):
@@ -480,17 +456,6 @@ class Object:
             self.v[i] = (self.x[i] - self.x_old[i]) * self.dh_inv
         # print(self.v[self.ijk_2_index(self.N_x-1,0,self.N_z-1)])
 
-    # @ti.kernel
-    # def updateVel_contact(self, copy_c: ti.types.ndarray()):
-    #     for i in range(self.N):
-    #         for j in range(self.N_surfaces):
-    #             if copy_c[j] == i:
-    #                 print(self.x_old[i] + self.v[i] * self.dh)
-    #                 self.v[i] = (self.x[i] - (self.x_old[i] + self.dh * self.v[i])) * self.dh_inv
-    #                 # print("corrected v ", self.x[i], self.x_old[i] + self.dh * self.v[i])
-    #             else:
-    #                 self.v[i] = (self.x[i] - self.x_old[i]) * self.dh_inv
-
     @ti.kernel
     def local_step(self):
         self.initialize_iter_vector()
@@ -499,12 +464,12 @@ class Object:
             self.clear_iter_vector()
             self.jacobi()
 
-    def assemble_B1(self, start, C):
-        c_ptr = start
+    def assemble_B1(self, C):
         first = True
         AinvIic_iter = np.arange(1)
         for i in range(self.N_surfaces):
-            if C[c_ptr] == self.surface_nodes[i]:
+            # if C[c_ptr] == self.surface_nodes[i]:
+            if C[i] != -1:
                 if first:
                     first = False
                     a1 = self.AinvIic.getcol(3 * i + 0).toarray()
@@ -516,8 +481,6 @@ class Object:
                     a2 = self.AinvIic.getcol(3 * i + 1).toarray()
                     a3 = self.AinvIic.getcol(3 * i + 2).toarray()
                     AinvIic_iter = np.hstack((AinvIic_iter, a1, a2, a3))
-                c_ptr += 1
-                if c_ptr >= len(C): break
         return csc_matrix(AinvIic_iter)
 
     @ti.kernel
@@ -531,24 +494,19 @@ class Object:
                 x_star[3 * ind + 1] = self.x_b[ind][1]
                 x_star[3 * ind + 2] = self.x_b[ind][2]
 
-    def global_step(self, sn):
+    def global_step(self, sn, length):
         dim = 3 * self.N
         dh2_inv = self.dh_inv**2
 
         xn = self.x.to_numpy().reshape(dim)
         p = self.x_proj.to_numpy().reshape(dim)
 
-        start = -1
-        if self.C[self.N_surfaces-1] != -1:
+        if length > 0:
+            Iic = lil_matrix((3*self.N, 3*length))
+            col_id = 0
             for i in range(self.N_surfaces):
                 if self.C[i] == -1:
-                    start = i
-                else: break
-            start += 1
-            num = self.N_surfaces - start
-            Iic = lil_matrix((3*self.N, 3*num))
-            col_id = 0
-            for i in range(start, self.N_surfaces):
+                    continue
                 # assemble Iic
                 ind = self.C[i]
                 Iic[3 * ind + 0, col_id] = 1
@@ -561,7 +519,9 @@ class Object:
             first = True
             Aic_np = np.arange(1)
             Acc_np = np.arange(1)
-            for i in range(start, self.N_surfaces):
+            for i in range(self.N_surfaces):
+                if self.C[i] == -1:
+                    continue
                 # assemble col
                 ind = self.C[i]
                 a1 = self.A.getcol(3 * ind + 0).toarray()
@@ -574,7 +534,9 @@ class Object:
                     Aic_np = np.hstack((Aic_np, a1, a2, a3))
             Aic = lil_matrix(Aic_np)
             first = True
-            for i in range(start, self.N_surfaces):
+            for i in range(self.N_surfaces):
+                if self.C[i] == -1:
+                    continue
                 # assemble row
                 ind = self.C[i]
                 b1 = Aic.getrow(3 * ind + 0).toarray()
@@ -587,16 +549,16 @@ class Object:
                     Acc_np = np.vstack((Acc_np, b1, b2, b3))
             Acc = lil_matrix(Acc_np)
 
-            B1 = self.assemble_B1(start, self.C)
+            B1 = self.assemble_B1(self.C)
             B2 = Iic - B1 @ Acc
             B3 = np.hstack((B1.toarray(), B2.toarray()))
             B3 = csc_matrix(B3)
             PURt = (Aic - Iic @ Acc).transpose()
             PULt = Iic.transpose()
             VPt = np.vstack((PURt.toarray(), PULt.toarray()))
-            data = np.ones(6 * num)
+            data = np.ones(6 * length)
             offset = np.array([0])
-            I2c2c = dia_matrix((data, offset), shape=(6 * num, 6 * num))
+            I2c2c = dia_matrix((data, offset), shape=(6 * length, 6 * length))
             B4 = I2c2c - VPt @ B3
 
             x_b = self.x_b.to_numpy().reshape(dim)
@@ -636,45 +598,70 @@ class Object:
     def update_C(self, C: ti.types.ndarray(), r: ti.types.ndarray(), obstacle: ti.types.ndarray()):
         epsilon = self.epsilon
         C_vec = ti.Vector([C[i] for i in range(self.N_surfaces)])
-
-        for i in range(self.N):
+        for i in range(self.N_surfaces):
+            ind = self.surface_nodes[i]
             if obstacle[i] == 1:
                 # left
-                r_vec = ti.Vector([r[3*i+0,0], r[3*i+1,0], r[3*i+2,0]])
-                xl = self.x[i] - self.gripper_left_pos
-                dis = xl.dot(self.gripper_left_normal)
-                if (-epsilon <= dis <= epsilon) and (r_vec.dot(self.gripper_left_normal) >= 0):
-                    C[self.locate_C(C_vec, i)] = -1
+                r_vec = ti.Vector([r[3 * ind + 0, 0], r[3 * ind + 1, 0], r[3 * ind + 2, 0]])
+                r_n = r_vec.dot(self.gripper_left_normal)
+                if r_n < 0:
+                    # remove from C
                     obstacle[i] = -1
-                if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
-                    C[self.locate_C(C_vec, i)] = -1
-                    obstacle[i] = -1
+                    C[i] = -1
+                    continue
 
             if obstacle[i] == 2:
                 # right
-                r_vec = ti.Vector([r[3*i+0,0], r[3*i+1,0], r[3*i+2,0]])
-                xr = self.x[i] - self.gripper_right_pos
-                dis = xr.dot(self.gripper_right_normal)
-                if (-epsilon <= dis <= epsilon) and (r_vec.dot(self.gripper_right_normal) >= 0):
-                    C[self.locate_C(C_vec, i)] = -1
+                r_vec = ti.Vector([r[3 * ind + 0, 0], r[3 * ind + 1, 0], r[3 * ind + 2, 0]])
+                r_n = r_vec.dot(self.gripper_right_normal)
+                if r_n < 0:
+                    # removed from C
                     obstacle[i] = -1
-                if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
-                    C[self.locate_C(C_vec, i)] = -1
-                    obstacle[i] = -1
+                    C[i] = -1
+                    continue
 
             if obstacle[i] == 3:
                 # floor
-                dis = self.x[i][1] - self.floor_h
-                # print(dis)
-                # print(r[3*i+1, 0])
-                if (-epsilon <= dis <= epsilon) and (r[3*i+1,0] >= 0):
-                    C[self.locate_C(C_vec, i)] = -1
+                r_n = r[3 * ind + 1, 0]
+                # print(r_n)
+                if r_n < 0:
+                    # removed from C
                     obstacle[i] = -1
-                    print("method 1")
-                if dis > 0 and -epsilon <= r[3*i+0,0] <= epsilon and -epsilon <= r[3*i+1,0] <= epsilon and -epsilon <= r[3*i+2,0] <= epsilon:
-                    C[self.locate_C(C_vec, i)] = -1
-                    obstacle[i] = -1
-                    print("method 2")
+                    C[i] = -1
+                    continue
+
+            if obstacle[i] == -1:
+                # no contact
+                # check left
+                xl = self.x[ind] - self.gripper_left_pos
+                dis = xl.dot(self.gripper_left_normal)
+                if dis < 0:
+                    C[i] = ind
+                    obstacle[i] = 1
+                    continue
+                # check right
+                xr = self.x[ind] - self.gripper_right_pos
+                dis = xr.dot(self.gripper_right_normal)
+                if dis < 0:
+                    C[i] = ind
+                    obstacle[i] = 2
+                    continue
+                # check floor
+                dis = self.x[ind][1] - self.floor_h
+                if dis < 0:
+                    C[i] = ind
+                    obstacle[i] = 3
+                    continue
+
+    def sort(self, c):
+        c.sort()
+        start = 0
+        for i in range(self.N_surfaces):
+            if c[i] == -1:
+                start = i
+            else:
+                break
+        return start
 
     def update(self):
         dim = 3 * self.N
@@ -688,27 +675,19 @@ class Object:
         f_ext = self.f_ext.to_numpy().reshape(dim)
         sn = xn + dh * vn + (dh ** 2) * linalg.inv(self.M) @ f_ext
         sn_spm = csc_matrix(sn).transpose()
-
         self.clear_C(self.C, self.obstacle)
         self.contact_detect(self.C, self.obstacle)
-        self.C.sort()
-        print(self.C)
+        length = self.is_contact(self.C)
+        new_length = length
 
-        # if self.C[self.N_surfaces-1] == -1:
-        #     self.initialize_solution(sn, self.obstacle)
-        #     for i in range(10):
-        #         # initialize sn first? or x_C = x* first?
-        #         self.local_step()
-        #         x_star = self.global_step(sn)
-        #         self.updatePos(x_star)
-        #     self.updateVel()
-        # else:
         while True:
+            print(self.C)
+            print(self.obstacle)
+            length = new_length
             self.initialize_solution(sn, self.obstacle)
-            for i in range(10):
-                # initialize sn first? or x_C = x* first?
+            for i in range(20):
                 self.local_step()
-                x_star = self.global_step(sn)
+                x_star = self.global_step(sn, length)
                 self.updatePos(x_star)
 
             self.compute_elastic_force()
@@ -716,9 +695,9 @@ class Object:
             x_spm = csc_matrix(self.x.to_numpy().reshape(dim)).transpose()
             r = dh2_inv * self.M @ (x_spm - sn_spm) - fint
             self.update_C(self.C, r.toarray(), self.obstacle)
-            self.C.sort()
-            # print("after update", self.C)
-            if self.C[self.N_surfaces - 1] == -1:
+            new_length = self.is_contact(self.C)
+            print(r.toarray())
+            if length == new_length:
                 self.updateVel()
                 break
 

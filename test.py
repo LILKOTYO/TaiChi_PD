@@ -3,11 +3,23 @@ import numpy as np
 from scipy.sparse import csc_matrix, csr_matrix, linalg, lil_matrix
 import math
 ti.init(arch=ti.gpu)
-q = 1
-w = 2
-a = q < 5 and w > 3
-print(a)
+a = np.zeros(5)
 
+
+@ti.kernel
+def test(arr: ti.types.ndarray()):
+    brr = np.array([arr[i] for i in range(5)])
+    print(test2(brr))
+
+
+@ti.func
+def test2(arr):
+    for i in range(5):
+        arr[i] = 2
+    return 2
+
+
+test(a)
 # a = np.zeros(5)
 #
 # @ti.func
