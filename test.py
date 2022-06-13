@@ -7,19 +7,18 @@ a = np.zeros(5)
 
 
 @ti.kernel
-def test(arr: ti.types.ndarray()):
-    brr = np.array([arr[i] for i in range(5)])
-    print(test2(brr))
+def test():
+    A = ti.Matrix([[1.0, 5.0, 3.0], [4.0, 4.0, 6.0], [7.0, 2.0, 9.0]])
+    U, S, D = ti.svd(A)
+    S[0, 0] = S[0, 0] * 2
+    S[1, 1] = S[1, 1] * 0.5
+    S[2, 2] = S[2, 2] * 1
+    A_new = U @ S @ D.transpose()
+    print(A_new)
 
 
-@ti.func
-def test2(arr):
-    for i in range(5):
-        arr[i] = 2
-    return 2
+test()
 
-
-test(a)
 # a = np.zeros(5)
 #
 # @ti.func

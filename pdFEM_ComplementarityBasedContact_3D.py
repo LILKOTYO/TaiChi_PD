@@ -29,7 +29,7 @@ class Object:
         self.gravity = 5.0
         self.jacobi_iter = 10
         self.jacobi_alpha = 0.1
-        self.stiffness = 1000
+        self.stiffness = 5000
         self.epsilon = 1e-20
         self.YoungsModulus = ti.field(ti.f32, ())
         self.PoissonsRatio = ti.field(ti.f32, ())
@@ -386,26 +386,33 @@ class Object:
                 print("SOMETHING WRONG !!!")
 
             if flag_left:
-                t_left = (self.gripper_left_pos - self.x[ind]).dot(self.gripper_left_normal) \
-                         / (self.v[ind].dot(self.gripper_left_normal))
-                # self.x[ind] = self.x[ind] + t_left * self.v[ind]
-                self.x_b[ind] = self.x[ind] + t_left * self.v[ind]
+                t_left = (self.gripper_left_pos - self.x[ind]).dot(self.gripper_left_normal)
+                if -self.epsilon <= t_left <= self.epsilon:
+                    self.x_b[ind] = self.x[ind]
+                else:
+                    t_left = t_left / self.v[ind].dot(self.gripper_left_normal)
+                    self.x_b[ind] = self.x[ind] + t_left * self.v[ind]
                 C[i] = ind
                 obstacle[i] = 1
 
             if flag_right:
-                t_right = (self.gripper_right_pos - self.x[ind]).dot(self.gripper_right_normal) \
-                          / (self.v[ind].dot(self.gripper_right_normal))
-                # self.x[ind] = self.x[ind] + t_right * self.v[ind]
-                self.x_b[ind] = self.x[ind] + t_right * self.v[ind]
+                t_right = (self.gripper_right_pos - self.x[ind]).dot(self.gripper_right_normal)
+                if -self.epsilon <= t_right <= self.epsilon:
+                    self.x_b[ind] = self.x[ind]
+                else:
+                    t_right = t_right / self.v[ind].dot(self.gripper_right_normal)
+                    self.x_b[ind] = self.x[ind] + t_right * self.v[ind]
                 C[i] = ind
                 obstacle[i] = 2
 
             # floor
             if flag_floor:
-                t_floor = (self.floor_h - self.x[ind][1]) / self.v[ind][1]
-                # self.x[ind] = self.x[ind] + t_floor * self.v[ind]
-                self.x_b[ind] = self.x[ind] + t_floor * self.v[ind]
+                t_floor = self.floor_h - self.x[ind][1]
+                if -self.epsilon <= t_floor <= self.epsilon:
+                    self.x_b[ind] = self.x[ind]
+                else:
+                    t_floor = t_floor / self.v[ind][1]
+                    self.x_b[ind] = self.x[ind] + t_floor * self.v[ind]
                 C[i] = ind
                 obstacle[i] = 3
 
@@ -597,7 +604,6 @@ class Object:
     @ti.kernel
     def update_C(self, C: ti.types.ndarray(), r: ti.types.ndarray(), obstacle: ti.types.ndarray()):
         epsilon = self.epsilon
-        C_vec = ti.Vector([C[i] for i in range(self.N_surfaces)])
         for i in range(self.N_surfaces):
             ind = self.surface_nodes[i]
             if obstacle[i] == 1:
@@ -608,6 +614,7 @@ class Object:
                     # remove from C
                     obstacle[i] = -1
                     C[i] = -1
+                    self.x_b[ind] = ti.Vector([0.0, 0.0, 0.0])
                     continue
 
             if obstacle[i] == 2:
@@ -618,6 +625,7 @@ class Object:
                     # removed from C
                     obstacle[i] = -1
                     C[i] = -1
+                    self.x_b[ind] = ti.Vector([0.0, 0.0, 0.0])
                     continue
 
             if obstacle[i] == 3:
@@ -628,6 +636,7 @@ class Object:
                     # removed from C
                     obstacle[i] = -1
                     C[i] = -1
+                    self.x_b[ind] = ti.Vector([0.0, 0.0, 0.0])
                     continue
 
             if obstacle[i] == -1:
@@ -638,6 +647,7 @@ class Object:
                 if dis < 0:
                     C[i] = ind
                     obstacle[i] = 1
+                    self.x_b[ind] = self.x[ind] - dis * self.gripper_left_normal
                     continue
                 # check right
                 xr = self.x[ind] - self.gripper_right_pos
@@ -645,12 +655,14 @@ class Object:
                 if dis < 0:
                     C[i] = ind
                     obstacle[i] = 2
+                    self.x_b[ind] = self.x[ind] - dis * self.gripper_right_normal
                     continue
                 # check floor
                 dis = self.x[ind][1] - self.floor_h
                 if dis < 0:
                     C[i] = ind
                     obstacle[i] = 3
+                    self.x_b[ind][1] = self.x[ind][1] - dis
                     continue
 
     def sort(self, c):
@@ -682,12 +694,11 @@ class Object:
 
         while True:
             print("before: ", self.C)
-            # print(self.obstacle)
             length = new_length
             self.initialize_solution(sn, self.obstacle)
-            for i in range(20):
+            # print("initialized solution is: ", self.x)
+            for i in range(10):
                 self.local_step()
-                print(self.x_proj[2])
                 x_star = self.global_step(sn, length)
                 self.updatePos(x_star)
 
@@ -701,7 +712,8 @@ class Object:
             print(length, new_length)
             if length == new_length:
                 self.updateVel()
-                print(self.v[2])
+                # print("after x is: ", self.x)
+                # print("after v is: ", self.v)
                 break
 
 
